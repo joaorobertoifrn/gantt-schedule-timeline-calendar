@@ -1,3 +1,1544 @@
+var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+
+function createCommonjsModule(fn, module) {
+	return module = { exports: {} }, fn(module, module.exports), module.exports;
+}
+
+var pep = createCommonjsModule(function (module, exports) {
+/*!
+ * PEP v0.5.1 | https://github.com/jquery/PEP
+ * Copyright jQuery Foundation and other contributors | http://jquery.org/license
+ */
+
+(function (global, factory) {
+   module.exports = factory() ;
+}(commonjsGlobal, function () {
+  /**
+   * This is the constructor for new PointerEvents.
+   *
+   * New Pointer Events must be given a type, and an optional dictionary of
+   * initialization properties.
+   *
+   * Due to certain platform requirements, events returned from the constructor
+   * identify as MouseEvents.
+   *
+   * @constructor
+   * @param {String} inType The type of the event to create.
+   * @param {Object} [inDict] An optional dictionary of initial event properties.
+   * @return {Event} A new PointerEvent of type `inType`, initialized with properties from `inDict`.
+   */
+  var MOUSE_PROPS = [
+    'bubbles',
+    'cancelable',
+    'view',
+    'screenX',
+    'screenY',
+    'clientX',
+    'clientY',
+    'ctrlKey',
+    'altKey',
+    'shiftKey',
+    'metaKey',
+    'button',
+    'relatedTarget',
+    'pageX',
+    'pageY'
+  ];
+
+  var MOUSE_DEFAULTS = [
+    false,
+    false,
+    null,
+    0,
+    0,
+    0,
+    0,
+    false,
+    false,
+    false,
+    false,
+    0,
+    null,
+    0,
+    0
+  ];
+
+  function PointerEvent(inType, inDict) {
+    inDict = inDict || Object.create(null);
+
+    var e = document.createEvent('Event');
+    e.initEvent(inType, inDict.bubbles || false, inDict.cancelable || false);
+
+    // define inherited MouseEvent properties
+    // skip bubbles and cancelable since they're set above in initEvent()
+    for (var i = 2, p; i < MOUSE_PROPS.length; i++) {
+      p = MOUSE_PROPS[i];
+      e[p] = inDict[p] || MOUSE_DEFAULTS[i];
+    }
+    e.buttons = inDict.buttons || 0;
+
+    // Spec requires that pointers without pressure specified use 0.5 for down
+    // state and 0 for up state.
+    var pressure = 0;
+
+    if (inDict.pressure !== undefined && e.buttons) {
+      pressure = inDict.pressure;
+    } else {
+      pressure = e.buttons ? 0.5 : 0;
+    }
+
+    // add x/y properties aliased to clientX/Y
+    e.x = e.clientX;
+    e.y = e.clientY;
+
+    // define the properties of the PointerEvent interface
+    e.pointerId = inDict.pointerId || 0;
+    e.width = inDict.width || 1;
+    e.height = inDict.height || 1;
+    e.pressure = pressure;
+    e.tiltX = inDict.tiltX || 0;
+    e.tiltY = inDict.tiltY || 0;
+    e.twist = inDict.twist || 0;
+    e.tangentialPressure = inDict.tangentialPressure || 0;
+    e.pointerType = inDict.pointerType || '';
+    e.hwTimestamp = inDict.hwTimestamp || 0;
+    e.isPrimary = inDict.isPrimary || false;
+    e.detail = 0;
+    return e;
+  }
+
+  /**
+   * This module implements a map of pointer states
+   */
+  var USE_MAP = window.Map && window.Map.prototype.forEach;
+  var PointerMap = USE_MAP ? Map : SparseArrayMap;
+
+  function SparseArrayMap() {
+    this.array = [];
+    this.size = 0;
+  }
+
+  SparseArrayMap.prototype = {
+    set: function(k, v) {
+      if (v === undefined) {
+        return this.delete(k);
+      }
+      if (!this.has(k)) {
+        this.size++;
+      }
+      this.array[k] = v;
+    },
+    has: function(k) {
+      return this.array[k] !== undefined;
+    },
+    delete: function(k) {
+      if (this.has(k)) {
+        delete this.array[k];
+        this.size--;
+      }
+    },
+    get: function(k) {
+      return this.array[k];
+    },
+    clear: function() {
+      this.array.length = 0;
+      this.size = 0;
+    },
+
+    // return value, key, map
+    forEach: function(callback, thisArg) {
+      return this.array.forEach(function(v, k) {
+        callback.call(thisArg, v, k, this);
+      }, this);
+    }
+  };
+
+  var CLONE_PROPS = [
+
+    // MouseEvent
+    'bubbles',
+    'cancelable',
+    'view',
+    'detail',
+    'screenX',
+    'screenY',
+    'clientX',
+    'clientY',
+    'ctrlKey',
+    'altKey',
+    'shiftKey',
+    'metaKey',
+    'button',
+    'relatedTarget',
+
+    // DOM Level 3
+    'buttons',
+
+    // PointerEvent
+    'pointerId',
+    'width',
+    'height',
+    'pressure',
+    'tiltX',
+    'tiltY',
+    'pointerType',
+    'hwTimestamp',
+    'isPrimary',
+
+    // event instance
+    'type',
+    'target',
+    'currentTarget',
+    'which',
+    'pageX',
+    'pageY',
+    'timeStamp'
+  ];
+
+  var CLONE_DEFAULTS = [
+
+    // MouseEvent
+    false,
+    false,
+    null,
+    null,
+    0,
+    0,
+    0,
+    0,
+    false,
+    false,
+    false,
+    false,
+    0,
+    null,
+
+    // DOM Level 3
+    0,
+
+    // PointerEvent
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    '',
+    0,
+    false,
+
+    // event instance
+    '',
+    null,
+    null,
+    0,
+    0,
+    0,
+    0
+  ];
+
+  var BOUNDARY_EVENTS = {
+    'pointerover': 1,
+    'pointerout': 1,
+    'pointerenter': 1,
+    'pointerleave': 1
+  };
+
+  var HAS_SVG_INSTANCE = (typeof SVGElementInstance !== 'undefined');
+
+  /**
+   * This module is for normalizing events. Mouse and Touch events will be
+   * collected here, and fire PointerEvents that have the same semantics, no
+   * matter the source.
+   * Events fired:
+   *   - pointerdown: a pointing is added
+   *   - pointerup: a pointer is removed
+   *   - pointermove: a pointer is moved
+   *   - pointerover: a pointer crosses into an element
+   *   - pointerout: a pointer leaves an element
+   *   - pointercancel: a pointer will no longer generate events
+   */
+  var dispatcher = {
+    pointermap: new PointerMap(),
+    eventMap: Object.create(null),
+    captureInfo: Object.create(null),
+
+    // Scope objects for native events.
+    // This exists for ease of testing.
+    eventSources: Object.create(null),
+    eventSourceList: [],
+    /**
+     * Add a new event source that will generate pointer events.
+     *
+     * `inSource` must contain an array of event names named `events`, and
+     * functions with the names specified in the `events` array.
+     * @param {string} name A name for the event source
+     * @param {Object} source A new source of platform events.
+     */
+    registerSource: function(name, source) {
+      var s = source;
+      var newEvents = s.events;
+      if (newEvents) {
+        newEvents.forEach(function(e) {
+          if (s[e]) {
+            this.eventMap[e] = s[e].bind(s);
+          }
+        }, this);
+        this.eventSources[name] = s;
+        this.eventSourceList.push(s);
+      }
+    },
+    register: function(element) {
+      var l = this.eventSourceList.length;
+      for (var i = 0, es; (i < l) && (es = this.eventSourceList[i]); i++) {
+
+        // call eventsource register
+        es.register.call(es, element);
+      }
+    },
+    unregister: function(element) {
+      var l = this.eventSourceList.length;
+      for (var i = 0, es; (i < l) && (es = this.eventSourceList[i]); i++) {
+
+        // call eventsource register
+        es.unregister.call(es, element);
+      }
+    },
+    contains: /*scope.external.contains || */function(container, contained) {
+      try {
+        return container.contains(contained);
+      } catch (ex) {
+
+        // most likely: https://bugzilla.mozilla.org/show_bug.cgi?id=208427
+        return false;
+      }
+    },
+
+    // EVENTS
+    down: function(inEvent) {
+      inEvent.bubbles = true;
+      this.fireEvent('pointerdown', inEvent);
+    },
+    move: function(inEvent) {
+      inEvent.bubbles = true;
+      this.fireEvent('pointermove', inEvent);
+    },
+    up: function(inEvent) {
+      inEvent.bubbles = true;
+      this.fireEvent('pointerup', inEvent);
+    },
+    enter: function(inEvent) {
+      inEvent.bubbles = false;
+      this.fireEvent('pointerenter', inEvent);
+    },
+    leave: function(inEvent) {
+      inEvent.bubbles = false;
+      this.fireEvent('pointerleave', inEvent);
+    },
+    over: function(inEvent) {
+      inEvent.bubbles = true;
+      this.fireEvent('pointerover', inEvent);
+    },
+    out: function(inEvent) {
+      inEvent.bubbles = true;
+      this.fireEvent('pointerout', inEvent);
+    },
+    cancel: function(inEvent) {
+      inEvent.bubbles = true;
+      this.fireEvent('pointercancel', inEvent);
+    },
+    leaveOut: function(event) {
+      this.out(event);
+      this.propagate(event, this.leave, false);
+    },
+    enterOver: function(event) {
+      this.over(event);
+      this.propagate(event, this.enter, true);
+    },
+
+    // LISTENER LOGIC
+    eventHandler: function(inEvent) {
+
+      // This is used to prevent multiple dispatch of pointerevents from
+      // platform events. This can happen when two elements in different scopes
+      // are set up to create pointer events, which is relevant to Shadow DOM.
+      if (inEvent._handledByPE) {
+        return;
+      }
+      var type = inEvent.type;
+      var fn = this.eventMap && this.eventMap[type];
+      if (fn) {
+        fn(inEvent);
+      }
+      inEvent._handledByPE = true;
+    },
+
+    // set up event listeners
+    listen: function(target, events) {
+      events.forEach(function(e) {
+        this.addEvent(target, e);
+      }, this);
+    },
+
+    // remove event listeners
+    unlisten: function(target, events) {
+      events.forEach(function(e) {
+        this.removeEvent(target, e);
+      }, this);
+    },
+    addEvent: /*scope.external.addEvent || */function(target, eventName) {
+      target.addEventListener(eventName, this.boundHandler);
+    },
+    removeEvent: /*scope.external.removeEvent || */function(target, eventName) {
+      target.removeEventListener(eventName, this.boundHandler);
+    },
+
+    // EVENT CREATION AND TRACKING
+    /**
+     * Creates a new Event of type `inType`, based on the information in
+     * `inEvent`.
+     *
+     * @param {string} inType A string representing the type of event to create
+     * @param {Event} inEvent A platform event with a target
+     * @return {Event} A PointerEvent of type `inType`
+     */
+    makeEvent: function(inType, inEvent) {
+
+      // relatedTarget must be null if pointer is captured
+      if (this.captureInfo[inEvent.pointerId]) {
+        inEvent.relatedTarget = null;
+      }
+      var e = new PointerEvent(inType, inEvent);
+      if (inEvent.preventDefault) {
+        e.preventDefault = inEvent.preventDefault;
+      }
+      e._target = e._target || inEvent.target;
+      return e;
+    },
+
+    // make and dispatch an event in one call
+    fireEvent: function(inType, inEvent) {
+      var e = this.makeEvent(inType, inEvent);
+      return this.dispatchEvent(e);
+    },
+    /**
+     * Returns a snapshot of inEvent, with writable properties.
+     *
+     * @param {Event} inEvent An event that contains properties to copy.
+     * @return {Object} An object containing shallow copies of `inEvent`'s
+     *    properties.
+     */
+    cloneEvent: function(inEvent) {
+      var eventCopy = Object.create(null);
+      var p;
+      for (var i = 0; i < CLONE_PROPS.length; i++) {
+        p = CLONE_PROPS[i];
+        eventCopy[p] = inEvent[p] || CLONE_DEFAULTS[i];
+
+        // Work around SVGInstanceElement shadow tree
+        // Return the <use> element that is represented by the instance for Safari, Chrome, IE.
+        // This is the behavior implemented by Firefox.
+        if (HAS_SVG_INSTANCE && (p === 'target' || p === 'relatedTarget')) {
+          if (eventCopy[p] instanceof SVGElementInstance) {
+            eventCopy[p] = eventCopy[p].correspondingUseElement;
+          }
+        }
+      }
+
+      // keep the semantics of preventDefault
+      if (inEvent.preventDefault) {
+        eventCopy.preventDefault = function() {
+          inEvent.preventDefault();
+        };
+      }
+      return eventCopy;
+    },
+    getTarget: function(inEvent) {
+      var capture = this.captureInfo[inEvent.pointerId];
+      if (!capture) {
+        return inEvent._target;
+      }
+      if (inEvent._target === capture || !(inEvent.type in BOUNDARY_EVENTS)) {
+        return capture;
+      }
+    },
+    propagate: function(event, fn, propagateDown) {
+      var target = event.target;
+      var targets = [];
+
+      // Order of conditions due to document.contains() missing in IE.
+      while (target != null && target !== document && !target.contains(event.relatedTarget)) {
+        targets.push(target);
+        target = target.parentNode;
+
+        // Touch: Do not propagate if node is detached.
+        if (!target) {
+          return;
+        }
+      }
+      if (propagateDown) {
+        targets.reverse();
+      }
+      targets.forEach(function(target) {
+        event.target = target;
+        fn.call(this, event);
+      }, this);
+    },
+    setCapture: function(inPointerId, inTarget, skipDispatch) {
+      if (this.captureInfo[inPointerId]) {
+        this.releaseCapture(inPointerId, skipDispatch);
+      }
+
+      this.captureInfo[inPointerId] = inTarget;
+      this.implicitRelease = this.releaseCapture.bind(this, inPointerId, skipDispatch);
+      document.addEventListener('pointerup', this.implicitRelease);
+      document.addEventListener('pointercancel', this.implicitRelease);
+
+      var e = new PointerEvent('gotpointercapture', { bubbles: true });
+      e.pointerId = inPointerId;
+      e._target = inTarget;
+
+      if (!skipDispatch) {
+        this.asyncDispatchEvent(e);
+      }
+    },
+    releaseCapture: function(inPointerId, skipDispatch) {
+      var t = this.captureInfo[inPointerId];
+      if (!t) {
+        return;
+      }
+
+      this.captureInfo[inPointerId] = undefined;
+      document.removeEventListener('pointerup', this.implicitRelease);
+      document.removeEventListener('pointercancel', this.implicitRelease);
+
+      var e = new PointerEvent('lostpointercapture', { bubbles: true });
+      e.pointerId = inPointerId;
+      e._target = t;
+
+      if (!skipDispatch) {
+        this.asyncDispatchEvent(e);
+      }
+    },
+    /**
+     * Dispatches the event to its target.
+     *
+     * @param {Event} inEvent The event to be dispatched.
+     * @return {Boolean} True if an event handler returns true, false otherwise.
+     */
+    dispatchEvent: /*scope.external.dispatchEvent || */function(inEvent) {
+      var t = this.getTarget(inEvent);
+      if (t) {
+        return t.dispatchEvent(inEvent);
+      }
+    },
+    asyncDispatchEvent: function(inEvent) {
+      requestAnimationFrame(this.dispatchEvent.bind(this, inEvent));
+    }
+  };
+  dispatcher.boundHandler = dispatcher.eventHandler.bind(dispatcher);
+
+  var targeting = {
+    shadow: function(inEl) {
+      if (inEl) {
+        return inEl.shadowRoot || inEl.webkitShadowRoot;
+      }
+    },
+    canTarget: function(shadow) {
+      return shadow && Boolean(shadow.elementFromPoint);
+    },
+    targetingShadow: function(inEl) {
+      var s = this.shadow(inEl);
+      if (this.canTarget(s)) {
+        return s;
+      }
+    },
+    olderShadow: function(shadow) {
+      var os = shadow.olderShadowRoot;
+      if (!os) {
+        var se = shadow.querySelector('shadow');
+        if (se) {
+          os = se.olderShadowRoot;
+        }
+      }
+      return os;
+    },
+    allShadows: function(element) {
+      var shadows = [];
+      var s = this.shadow(element);
+      while (s) {
+        shadows.push(s);
+        s = this.olderShadow(s);
+      }
+      return shadows;
+    },
+    searchRoot: function(inRoot, x, y) {
+      if (inRoot) {
+        var t = inRoot.elementFromPoint(x, y);
+        var st, sr;
+
+        // is element a shadow host?
+        sr = this.targetingShadow(t);
+        while (sr) {
+
+          // find the the element inside the shadow root
+          st = sr.elementFromPoint(x, y);
+          if (!st) {
+
+            // check for older shadows
+            sr = this.olderShadow(sr);
+          } else {
+
+            // shadowed element may contain a shadow root
+            var ssr = this.targetingShadow(st);
+            return this.searchRoot(ssr, x, y) || st;
+          }
+        }
+
+        // light dom element is the target
+        return t;
+      }
+    },
+    owner: function(element) {
+      var s = element;
+
+      // walk up until you hit the shadow root or document
+      while (s.parentNode) {
+        s = s.parentNode;
+      }
+
+      // the owner element is expected to be a Document or ShadowRoot
+      if (s.nodeType !== Node.DOCUMENT_NODE && s.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) {
+        s = document;
+      }
+      return s;
+    },
+    findTarget: function(inEvent) {
+      var x = inEvent.clientX;
+      var y = inEvent.clientY;
+
+      // if the listener is in the shadow root, it is much faster to start there
+      var s = this.owner(inEvent.target);
+
+      // if x, y is not in this root, fall back to document search
+      if (!s.elementFromPoint(x, y)) {
+        s = document;
+      }
+      return this.searchRoot(s, x, y);
+    }
+  };
+
+  var forEach = Array.prototype.forEach.call.bind(Array.prototype.forEach);
+  var map = Array.prototype.map.call.bind(Array.prototype.map);
+  var toArray = Array.prototype.slice.call.bind(Array.prototype.slice);
+  var filter = Array.prototype.filter.call.bind(Array.prototype.filter);
+  var MO = window.MutationObserver || window.WebKitMutationObserver;
+  var SELECTOR = '[touch-action]';
+  var OBSERVER_INIT = {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeOldValue: true,
+    attributeFilter: ['touch-action']
+  };
+
+  function Installer(add, remove, changed, binder) {
+    this.addCallback = add.bind(binder);
+    this.removeCallback = remove.bind(binder);
+    this.changedCallback = changed.bind(binder);
+    if (MO) {
+      this.observer = new MO(this.mutationWatcher.bind(this));
+    }
+  }
+
+  Installer.prototype = {
+    watchSubtree: function(target) {
+
+      // Only watch scopes that can target find, as these are top-level.
+      // Otherwise we can see duplicate additions and removals that add noise.
+      //
+      // TODO(dfreedman): For some instances with ShadowDOMPolyfill, we can see
+      // a removal without an insertion when a node is redistributed among
+      // shadows. Since it all ends up correct in the document, watching only
+      // the document will yield the correct mutations to watch.
+      if (this.observer && targeting.canTarget(target)) {
+        this.observer.observe(target, OBSERVER_INIT);
+      }
+    },
+    enableOnSubtree: function(target) {
+      this.watchSubtree(target);
+      if (target === document && document.readyState !== 'complete') {
+        this.installOnLoad();
+      } else {
+        this.installNewSubtree(target);
+      }
+    },
+    installNewSubtree: function(target) {
+      forEach(this.findElements(target), this.addElement, this);
+    },
+    findElements: function(target) {
+      if (target.querySelectorAll) {
+        return target.querySelectorAll(SELECTOR);
+      }
+      return [];
+    },
+    removeElement: function(el) {
+      this.removeCallback(el);
+    },
+    addElement: function(el) {
+      this.addCallback(el);
+    },
+    elementChanged: function(el, oldValue) {
+      this.changedCallback(el, oldValue);
+    },
+    concatLists: function(accum, list) {
+      return accum.concat(toArray(list));
+    },
+
+    // register all touch-action = none nodes on document load
+    installOnLoad: function() {
+      document.addEventListener('readystatechange', function() {
+        if (document.readyState === 'complete') {
+          this.installNewSubtree(document);
+        }
+      }.bind(this));
+    },
+    isElement: function(n) {
+      return n.nodeType === Node.ELEMENT_NODE;
+    },
+    flattenMutationTree: function(inNodes) {
+
+      // find children with touch-action
+      var tree = map(inNodes, this.findElements, this);
+
+      // make sure the added nodes are accounted for
+      tree.push(filter(inNodes, this.isElement));
+
+      // flatten the list
+      return tree.reduce(this.concatLists, []);
+    },
+    mutationWatcher: function(mutations) {
+      mutations.forEach(this.mutationHandler, this);
+    },
+    mutationHandler: function(m) {
+      if (m.type === 'childList') {
+        var added = this.flattenMutationTree(m.addedNodes);
+        added.forEach(this.addElement, this);
+        var removed = this.flattenMutationTree(m.removedNodes);
+        removed.forEach(this.removeElement, this);
+      } else if (m.type === 'attributes') {
+        this.elementChanged(m.target, m.oldValue);
+      }
+    }
+  };
+
+  function shadowSelector(s) {
+    return 'body /shadow-deep/ ' + s;
+  }
+  function rule(v) {
+    return '{ -ms-touch-action: ' + v + '; touch-action: ' + v + '; }';
+  }
+  var attrib2css = [
+    { selector: '[touch-action="none"]', value: 'none' },
+    { selector: '[touch-action="auto"]', value: 'auto' },
+    { selector: '[touch-action~="pan-x"]', value: 'pan-x' },
+    { selector: '[touch-action~="pan-y"]', value: 'pan-y' },
+    { selector: '[touch-action~="pan-up"]', value: 'pan-up' },
+    { selector: '[touch-action~="pan-down"]', value: 'pan-down' },
+    { selector: '[touch-action~="pan-left"]', value: 'pan-left' },
+    { selector: '[touch-action~="pan-right"]', value: 'pan-right' }
+  ];
+  var styles = '';
+
+  // only install stylesheet if the browser has touch action support
+  var hasNativePE = window.PointerEvent || window.MSPointerEvent;
+
+  // only add shadow selectors if shadowdom is supported
+  var hasShadowRoot = !window.ShadowDOMPolyfill && document.head.createShadowRoot;
+
+  function applyAttributeStyles() {
+    if (hasNativePE) {
+      attrib2css.forEach(function(r) {
+        styles += r.selector + rule(r.value) + '\n';
+        if (hasShadowRoot) {
+          styles += shadowSelector(r.selector) + rule(r.value) + '\n';
+        }
+      });
+
+      var el = document.createElement('style');
+      el.textContent = styles;
+      document.head.appendChild(el);
+    }
+  }
+
+  var pointermap = dispatcher.pointermap;
+
+  // radius around touchend that swallows mouse events
+  var DEDUP_DIST = 25;
+
+  // left, middle, right, back, forward
+  var BUTTON_TO_BUTTONS = [1, 4, 2, 8, 16];
+
+  var HAS_BUTTONS = false;
+  try {
+    HAS_BUTTONS = new MouseEvent('test', { buttons: 1 }).buttons === 1;
+  } catch (e) {}
+
+  // handler block for native mouse events
+  var mouseEvents = {
+    POINTER_ID: 1,
+    POINTER_TYPE: 'mouse',
+    events: [
+      'mousedown',
+      'webkitmouseforcechanged',
+      'mousemove',
+      'mouseup',
+      'mouseover',
+      'mouseout'
+    ],
+    register: function(target) {
+      dispatcher.listen(target, this.events);
+    },
+    unregister: function(target) {
+      dispatcher.unlisten(target, this.events);
+    },
+    lastTouches: [],
+
+    // collide with the global mouse listener
+    isEventSimulatedFromTouch: function(inEvent) {
+      var lts = this.lastTouches;
+      var x = inEvent.clientX;
+      var y = inEvent.clientY;
+      for (var i = 0, l = lts.length, t; i < l && (t = lts[i]); i++) {
+
+        // simulated mouse events will be swallowed near a primary touchend
+        var dx = Math.abs(x - t.x);
+        var dy = Math.abs(y - t.y);
+        if (dx <= DEDUP_DIST && dy <= DEDUP_DIST) {
+          return true;
+        }
+      }
+    },
+    prepareEvent: function(inEvent) {
+      var e = dispatcher.cloneEvent(inEvent);
+
+      // forward mouse preventDefault
+      var pd = e.preventDefault;
+      e.preventDefault = function() {
+        inEvent.preventDefault();
+        pd();
+      };
+      e.pointerId = this.POINTER_ID;
+      e.isPrimary = true;
+      e.pointerType = this.POINTER_TYPE;
+      if ('webkitForce' in inEvent) {
+        e.pressure = inEvent.webkitForce - MouseEvent.WEBKIT_FORCE_AT_MOUSE_DOWN;
+      }
+      return e;
+    },
+    prepareButtonsForMove: function(e, inEvent) {
+      var p = pointermap.get(this.POINTER_ID);
+
+      // Update buttons state after possible out-of-document mouseup.
+      if (inEvent.which === 0 || !p) {
+        e.buttons = 0;
+      } else {
+        e.buttons = p.buttons;
+      }
+      inEvent.buttons = e.buttons;
+    },
+    mousedown: function(inEvent) {
+      if (!this.isEventSimulatedFromTouch(inEvent)) {
+        var p = pointermap.get(this.POINTER_ID);
+        var e = this.prepareEvent(inEvent);
+        if (!HAS_BUTTONS) {
+          e.buttons = BUTTON_TO_BUTTONS[e.button];
+          if (p) { e.buttons |= p.buttons; }
+          inEvent.buttons = e.buttons;
+        }
+        pointermap.set(this.POINTER_ID, inEvent);
+        if (!p || p.buttons === 0) {
+          dispatcher.down(e);
+        } else {
+          dispatcher.move(e);
+        }
+      }
+    },
+
+    // This is called when the user force presses without moving x/y
+    webkitmouseforcechanged: function(inEvent) {
+      this.mousemove(inEvent);
+    },
+    mousemove: function(inEvent) {
+      if (!this.isEventSimulatedFromTouch(inEvent)) {
+        var e = this.prepareEvent(inEvent);
+        if (!HAS_BUTTONS) { this.prepareButtonsForMove(e, inEvent); }
+        e.button = -1;
+        pointermap.set(this.POINTER_ID, inEvent);
+        dispatcher.move(e);
+      }
+    },
+    mouseup: function(inEvent) {
+      if (!this.isEventSimulatedFromTouch(inEvent)) {
+        var p = pointermap.get(this.POINTER_ID);
+        var e = this.prepareEvent(inEvent);
+        if (!HAS_BUTTONS) {
+          var up = BUTTON_TO_BUTTONS[e.button];
+
+          // Produces wrong state of buttons in Browsers without `buttons` support
+          // when a mouse button that was pressed outside the document is released
+          // inside and other buttons are still pressed down.
+          e.buttons = p ? p.buttons & ~up : 0;
+          inEvent.buttons = e.buttons;
+        }
+        pointermap.set(this.POINTER_ID, inEvent);
+
+        // Support: Firefox <=44 only
+        // FF Ubuntu includes the lifted button in the `buttons` property on
+        // mouseup.
+        // https://bugzilla.mozilla.org/show_bug.cgi?id=1223366
+        e.buttons &= ~BUTTON_TO_BUTTONS[e.button];
+        if (e.buttons === 0) {
+          dispatcher.up(e);
+        } else {
+          dispatcher.move(e);
+        }
+      }
+    },
+    mouseover: function(inEvent) {
+      if (!this.isEventSimulatedFromTouch(inEvent)) {
+        var e = this.prepareEvent(inEvent);
+        if (!HAS_BUTTONS) { this.prepareButtonsForMove(e, inEvent); }
+        e.button = -1;
+        pointermap.set(this.POINTER_ID, inEvent);
+        dispatcher.enterOver(e);
+      }
+    },
+    mouseout: function(inEvent) {
+      if (!this.isEventSimulatedFromTouch(inEvent)) {
+        var e = this.prepareEvent(inEvent);
+        if (!HAS_BUTTONS) { this.prepareButtonsForMove(e, inEvent); }
+        e.button = -1;
+        dispatcher.leaveOut(e);
+      }
+    },
+    cancel: function(inEvent) {
+      var e = this.prepareEvent(inEvent);
+      dispatcher.cancel(e);
+      this.deactivateMouse();
+    },
+    deactivateMouse: function() {
+      pointermap.delete(this.POINTER_ID);
+    }
+  };
+
+  var captureInfo = dispatcher.captureInfo;
+  var findTarget = targeting.findTarget.bind(targeting);
+  var allShadows = targeting.allShadows.bind(targeting);
+  var pointermap$1 = dispatcher.pointermap;
+
+  // this should be long enough to ignore compat mouse events made by touch
+  var DEDUP_TIMEOUT = 2500;
+  var ATTRIB = 'touch-action';
+  var INSTALLER;
+
+  // bitmask for _scrollType
+  var UP = 1;
+  var DOWN = 2;
+  var LEFT = 4;
+  var RIGHT = 8;
+  var AUTO = UP | DOWN | LEFT | RIGHT;
+
+  // handler block for native touch events
+  var touchEvents = {
+    events: [
+      'touchstart',
+      'touchmove',
+      'touchforcechange',
+      'touchend',
+      'touchcancel'
+    ],
+    register: function(target) {
+      INSTALLER.enableOnSubtree(target);
+    },
+    unregister: function() {
+
+      // TODO(dfreedman): is it worth it to disconnect the MO?
+    },
+    elementAdded: function(el) {
+      var a = el.getAttribute(ATTRIB);
+      var st = this.touchActionToScrollType(a);
+      if (typeof st === "number") {
+        el._scrollType = st;
+        dispatcher.listen(el, this.events);
+
+        // set touch-action on shadows as well
+        allShadows(el).forEach(function(s) {
+          s._scrollType = st;
+          dispatcher.listen(s, this.events);
+        }, this);
+      }
+    },
+    elementRemoved: function(el) {
+
+      // In some cases, an element is removed before a touchend.
+      // When this is the case, we should wait for the touchend before unlistening,
+      // because we still want pointer events to bubble up after removing from DOM.
+      if (pointermap$1.size > 0) {
+        var evts = this.events;
+        el.addEventListener('touchend', function() {
+          el._scrollType = undefined;
+          dispatcher.unlisten(el, evts);
+        });
+      } else {
+        el._scrollType = undefined;
+        dispatcher.unlisten(el, this.events);
+      }
+
+      // remove touch-action from shadow
+      allShadows(el).forEach(function(s) {
+        s._scrollType = undefined;
+        dispatcher.unlisten(s, this.events);
+      }, this);
+    },
+    elementChanged: function(el, oldValue) {
+      var a = el.getAttribute(ATTRIB);
+      var st = this.touchActionToScrollType(a);
+      var oldSt = this.touchActionToScrollType(oldValue);
+
+      // simply update scrollType if listeners are already established
+      if (typeof st === "number" && typeof oldSt === "number") {
+        el._scrollType = st;
+        allShadows(el).forEach(function(s) {
+          s._scrollType = st;
+        }, this);
+      } else if (typeof oldSt === "number") {
+        this.elementRemoved(el);
+      } else if (typeof st === "number") {
+        this.elementAdded(el);
+      }
+    },
+    scrollTypes: {
+      UP: function(s) {
+        return s.includes('pan-y') || s.includes('pan-up') ? UP : 0;
+      },
+      DOWN: function(s) {
+        return s.includes('pan-y') || s.includes('pan-down') ? DOWN : 0;
+      },
+      LEFT: function(s) {
+        return s.includes('pan-x') || s.includes('pan-left') ? LEFT : 0;
+      },
+      RIGHT: function(s) {
+        return s.includes('pan-x') || s.includes('pan-right') ? RIGHT : 0;
+      }
+    },
+    touchActionToScrollType: function(touchAction) {
+      if (!touchAction) {
+        return;
+      }
+
+      if (touchAction === "auto") {
+        return AUTO;
+      }
+
+      if (touchAction === "none") {
+        return 0;
+      }
+
+      var s = touchAction.split(' ');
+      var st = this.scrollTypes;
+
+      // construct a bitmask of allowed scroll directions
+      return st.UP(s) | st.DOWN(s) | st.LEFT(s) | st.RIGHT(s);
+    },
+    POINTER_TYPE: 'touch',
+    firstTouch: null,
+    isPrimaryTouch: function(inTouch) {
+      return this.firstTouch === inTouch.identifier;
+    },
+    setPrimaryTouch: function(inTouch) {
+
+      // set primary touch if there no pointers, or the only pointer is the mouse
+      if (pointermap$1.size === 0 || (pointermap$1.size === 1 && pointermap$1.has(1))) {
+        this.firstTouch = inTouch.identifier;
+        this.firstXY = { X: inTouch.clientX, Y: inTouch.clientY };
+        this.scrolling = false;
+      }
+    },
+    removePrimaryPointer: function(inPointer) {
+      if (inPointer.isPrimary) {
+        this.firstTouch = null;
+        this.firstXY = null;
+      }
+    },
+    typeToButtons: function(type) {
+      var ret = 0;
+      if (type === 'touchstart' || type === 'touchmove' || type === 'touchforcechange') {
+        ret = 1;
+      }
+      return ret;
+    },
+    touchToPointer: function(inTouch) {
+      var cte = this.currentTouchEvent;
+      var e = dispatcher.cloneEvent(inTouch);
+
+      // We reserve pointerId 1 for Mouse.
+      // Touch identifiers can start at 0.
+      // Add 2 to the touch identifier for compatibility.
+      var id = e.pointerId = inTouch.identifier + 2;
+      e.target = captureInfo[id] || findTarget(e);
+      e.bubbles = true;
+      e.cancelable = true;
+      e.button = 0;
+      e.buttons = this.typeToButtons(cte.type);
+      e.width = (inTouch.radiusX || inTouch.webkitRadiusX || 0) * 2;
+      e.height = (inTouch.radiusY || inTouch.webkitRadiusY || 0) * 2;
+      e.pressure = inTouch.force !== undefined ?
+        inTouch.force :
+        inTouch.webkitForce !== undefined ?
+          inTouch.webkitForce : undefined;
+      e.isPrimary = this.isPrimaryTouch(inTouch);
+      if (inTouch.altitudeAngle) {
+        const tan = Math.tan(inTouch.altitudeAngle);
+        const radToDeg = 180 / Math.PI;
+        e.tiltX = Math.atan(Math.cos(inTouch.azimuthAngle) / tan) * radToDeg;
+        e.tiltY = Math.atan(Math.sin(inTouch.azimuthAngle) / tan) * radToDeg;
+      } else {
+        e.tiltX = 0;
+        e.tiltY = 0;
+      }
+      if (inTouch.touchType === 'stylus') {
+        e.pointerType = 'pen';
+      } else {
+        e.pointerType = this.POINTER_TYPE;
+      }
+
+      // forward modifier keys
+      e.altKey = cte.altKey;
+      e.ctrlKey = cte.ctrlKey;
+      e.metaKey = cte.metaKey;
+      e.shiftKey = cte.shiftKey;
+
+      // forward touch preventDefaults
+      var self = this;
+      e.preventDefault = function() {
+        self.scrolling = false;
+        self.firstXY = null;
+        cte.preventDefault();
+      };
+      return e;
+    },
+    processTouches: function(inEvent, inFunction) {
+      var tl = inEvent.changedTouches;
+      this.currentTouchEvent = inEvent;
+      for (var i = 0, t; i < tl.length; i++) {
+        t = tl[i];
+        inFunction.call(this, this.touchToPointer(t));
+      }
+    },
+
+    // For single axis scrollers, determines whether the element should emit
+    // pointer events or behave as a scroller
+    shouldScroll: function(inEvent) {
+      if (this.firstXY) {
+        var ret;
+        var st = inEvent.currentTarget._scrollType;
+        if (st === 0) {
+
+          // this element is a `touch-action: none`, should never scroll
+          ret = false;
+        } else if (st === AUTO) {
+
+          // this element is a `touch-action: auto`, should always scroll
+          ret = true;
+        } else {
+          var t = inEvent.changedTouches[0];
+
+          var dy = t.clientY - this.firstXY.Y;
+          var dya = Math.abs(dy);
+          var dx = t.clientX - this.firstXY.X;
+          var dxa = Math.abs(dx);
+
+          var up = st & UP;
+          var down = st & DOWN;
+          var left = st & LEFT;
+          var right = st & RIGHT;
+
+          if (left && right) {
+
+            // should scroll on the x axis
+            ret = dxa > dya;
+          } else if (left) {
+
+            // should scroll left
+            ret = dxa > dya && dx > 0;
+          } else if (right) {
+
+            // should scroll right
+            ret = dxa > dya && dx < 0;
+          }
+
+          if (!ret) {
+            if (up && down) {
+
+              // should scroll on the y axis
+              ret = dxa < dya;
+            } else if (up) {
+
+              // should scroll up
+              ret = dxa < dya && dy > 0;
+            } else if (down) {
+
+              // should scroll down
+              ret = dxa < dya && dy < 0;
+            }
+          }
+
+        }
+        this.firstXY = null;
+        return ret;
+      }
+    },
+    findTouch: function(inTL, inId) {
+      for (var i = 0, l = inTL.length, t; i < l && (t = inTL[i]); i++) {
+        if (t.identifier === inId) {
+          return true;
+        }
+      }
+    },
+
+    // In some instances, a touchstart can happen without a touchend. This
+    // leaves the pointermap in a broken state.
+    // Therefore, on every touchstart, we remove the touches that did not fire a
+    // touchend event.
+    // To keep state globally consistent, we fire a
+    // pointercancel for this "abandoned" touch
+    vacuumTouches: function(inEvent) {
+      var tl = inEvent.touches;
+
+      // pointermap.size should be < tl.length here, as the touchstart has not
+      // been processed yet.
+      if (pointermap$1.size >= tl.length) {
+        var d = [];
+        pointermap$1.forEach(function(value, key) {
+
+          // Never remove pointerId == 1, which is mouse.
+          // Touch identifiers are 2 smaller than their pointerId, which is the
+          // index in pointermap.
+          if (key !== 1 && !this.findTouch(tl, key - 2)) {
+            var p = value.out;
+            d.push(p);
+          }
+        }, this);
+        d.forEach(this.cancelOut, this);
+      }
+    },
+    touchstart: function(inEvent) {
+      this.vacuumTouches(inEvent);
+      this.setPrimaryTouch(inEvent.changedTouches[0]);
+      this.dedupSynthMouse(inEvent);
+      if (!this.scrolling) {
+        this.processTouches(inEvent, this.overDown);
+      }
+    },
+    overDown: function(inPointer) {
+      pointermap$1.set(inPointer.pointerId, {
+        target: inPointer.target,
+        out: inPointer,
+        outTarget: inPointer.target
+      });
+      dispatcher.enterOver(inPointer);
+      dispatcher.down(inPointer);
+    },
+
+    // Called when pressure or tilt changes without the x/y changing
+    touchforcechange: function(inEvent) {
+      this.touchmove(inEvent);
+    },
+    touchmove: function(inEvent) {
+      if (!this.scrolling) {
+        if (this.shouldScroll(inEvent)) {
+          this.scrolling = true;
+          this.touchcancel(inEvent);
+        } else {
+          inEvent.preventDefault();
+          this.processTouches(inEvent, this.moveOverOut);
+        }
+      }
+    },
+    moveOverOut: function(inPointer) {
+      var event = inPointer;
+      var pointer = pointermap$1.get(event.pointerId);
+
+      // a finger drifted off the screen, ignore it
+      if (!pointer) {
+        return;
+      }
+      var outEvent = pointer.out;
+      var outTarget = pointer.outTarget;
+      dispatcher.move(event);
+      if (outEvent && outTarget !== event.target) {
+        outEvent.relatedTarget = event.target;
+        event.relatedTarget = outTarget;
+
+        // recover from retargeting by shadow
+        outEvent.target = outTarget;
+        if (event.target) {
+          dispatcher.leaveOut(outEvent);
+          dispatcher.enterOver(event);
+        } else {
+
+          // clean up case when finger leaves the screen
+          event.target = outTarget;
+          event.relatedTarget = null;
+          this.cancelOut(event);
+        }
+      }
+      pointer.out = event;
+      pointer.outTarget = event.target;
+    },
+    touchend: function(inEvent) {
+      this.dedupSynthMouse(inEvent);
+      this.processTouches(inEvent, this.upOut);
+    },
+    upOut: function(inPointer) {
+      if (!this.scrolling) {
+        dispatcher.up(inPointer);
+        dispatcher.leaveOut(inPointer);
+      }
+      this.cleanUpPointer(inPointer);
+    },
+    touchcancel: function(inEvent) {
+      this.processTouches(inEvent, this.cancelOut);
+    },
+    cancelOut: function(inPointer) {
+      dispatcher.cancel(inPointer);
+      dispatcher.leaveOut(inPointer);
+      this.cleanUpPointer(inPointer);
+    },
+    cleanUpPointer: function(inPointer) {
+      pointermap$1.delete(inPointer.pointerId);
+      this.removePrimaryPointer(inPointer);
+    },
+
+    // prevent synth mouse events from creating pointer events
+    dedupSynthMouse: function(inEvent) {
+      var lts = mouseEvents.lastTouches;
+      var t = inEvent.changedTouches[0];
+
+      // only the primary finger will synth mouse events
+      if (this.isPrimaryTouch(t)) {
+
+        // remember x/y of last touch
+        var lt = { x: t.clientX, y: t.clientY };
+        lts.push(lt);
+        var fn = (function(lts, lt) {
+          var i = lts.indexOf(lt);
+          if (i > -1) {
+            lts.splice(i, 1);
+          }
+        }).bind(null, lts, lt);
+        setTimeout(fn, DEDUP_TIMEOUT);
+      }
+    }
+  };
+
+  INSTALLER = new Installer(touchEvents.elementAdded, touchEvents.elementRemoved,
+    touchEvents.elementChanged, touchEvents);
+
+  var pointermap$2 = dispatcher.pointermap;
+  var HAS_BITMAP_TYPE = window.MSPointerEvent &&
+    typeof window.MSPointerEvent.MSPOINTER_TYPE_MOUSE === 'number';
+  var msEvents = {
+    events: [
+      'MSPointerDown',
+      'MSPointerMove',
+      'MSPointerUp',
+      'MSPointerOut',
+      'MSPointerOver',
+      'MSPointerCancel',
+      'MSGotPointerCapture',
+      'MSLostPointerCapture'
+    ],
+    register: function(target) {
+      dispatcher.listen(target, this.events);
+    },
+    unregister: function(target) {
+      dispatcher.unlisten(target, this.events);
+    },
+    POINTER_TYPES: [
+      '',
+      'unavailable',
+      'touch',
+      'pen',
+      'mouse'
+    ],
+    prepareEvent: function(inEvent) {
+      var e = inEvent;
+      if (HAS_BITMAP_TYPE) {
+        e = dispatcher.cloneEvent(inEvent);
+        e.pointerType = this.POINTER_TYPES[inEvent.pointerType];
+      }
+      return e;
+    },
+    cleanup: function(id) {
+      pointermap$2.delete(id);
+    },
+    MSPointerDown: function(inEvent) {
+      pointermap$2.set(inEvent.pointerId, inEvent);
+      var e = this.prepareEvent(inEvent);
+      dispatcher.down(e);
+    },
+    MSPointerMove: function(inEvent) {
+      var e = this.prepareEvent(inEvent);
+      dispatcher.move(e);
+    },
+    MSPointerUp: function(inEvent) {
+      var e = this.prepareEvent(inEvent);
+      dispatcher.up(e);
+      this.cleanup(inEvent.pointerId);
+    },
+    MSPointerOut: function(inEvent) {
+      var e = this.prepareEvent(inEvent);
+      dispatcher.leaveOut(e);
+    },
+    MSPointerOver: function(inEvent) {
+      var e = this.prepareEvent(inEvent);
+      dispatcher.enterOver(e);
+    },
+    MSPointerCancel: function(inEvent) {
+      var e = this.prepareEvent(inEvent);
+      dispatcher.cancel(e);
+      this.cleanup(inEvent.pointerId);
+    },
+    MSLostPointerCapture: function(inEvent) {
+      var e = dispatcher.makeEvent('lostpointercapture', inEvent);
+      dispatcher.dispatchEvent(e);
+    },
+    MSGotPointerCapture: function(inEvent) {
+      var e = dispatcher.makeEvent('gotpointercapture', inEvent);
+      dispatcher.dispatchEvent(e);
+    }
+  };
+
+  function applyPolyfill() {
+
+    // only activate if this platform does not have pointer events
+    if (!window.PointerEvent) {
+      window.PointerEvent = PointerEvent;
+
+      if (window.navigator.msPointerEnabled) {
+        var tp = window.navigator.msMaxTouchPoints;
+        Object.defineProperty(window.navigator, 'maxTouchPoints', {
+          value: tp,
+          enumerable: true
+        });
+        dispatcher.registerSource('ms', msEvents);
+      } else {
+        Object.defineProperty(window.navigator, 'maxTouchPoints', {
+          value: 0,
+          enumerable: true
+        });
+        dispatcher.registerSource('mouse', mouseEvents);
+        if (window.ontouchstart !== undefined) {
+          dispatcher.registerSource('touch', touchEvents);
+        }
+      }
+
+      dispatcher.register(document);
+    }
+  }
+
+  var n = window.navigator;
+  var s;
+  var r;
+  var h;
+  function assertActive(id) {
+    if (!dispatcher.pointermap.has(id)) {
+      var error = new Error('NotFoundError');
+      error.name = 'NotFoundError';
+      throw error;
+    }
+  }
+  function assertConnected(elem) {
+    var parent = elem.parentNode;
+    while (parent && parent !== elem.ownerDocument) {
+      parent = parent.parentNode;
+    }
+    if (!parent) {
+      var error = new Error('InvalidStateError');
+      error.name = 'InvalidStateError';
+      throw error;
+    }
+  }
+  function inActiveButtonState(id) {
+    var p = dispatcher.pointermap.get(id);
+    return p.buttons !== 0;
+  }
+  if (n.msPointerEnabled) {
+    s = function(pointerId) {
+      assertActive(pointerId);
+      assertConnected(this);
+      if (inActiveButtonState(pointerId)) {
+        dispatcher.setCapture(pointerId, this, true);
+        this.msSetPointerCapture(pointerId);
+      }
+    };
+    r = function(pointerId) {
+      assertActive(pointerId);
+      dispatcher.releaseCapture(pointerId, true);
+      this.msReleasePointerCapture(pointerId);
+    };
+  } else {
+    s = function setPointerCapture(pointerId) {
+      assertActive(pointerId);
+      assertConnected(this);
+      if (inActiveButtonState(pointerId)) {
+        dispatcher.setCapture(pointerId, this);
+      }
+    };
+    r = function releasePointerCapture(pointerId) {
+      assertActive(pointerId);
+      dispatcher.releaseCapture(pointerId);
+    };
+  }
+  h = function hasPointerCapture(pointerId) {
+    return !!dispatcher.captureInfo[pointerId];
+  };
+
+  function applyPolyfill$1() {
+    if (window.Element && !Element.prototype.setPointerCapture) {
+      Object.defineProperties(Element.prototype, {
+        'setPointerCapture': {
+          value: s
+        },
+        'releasePointerCapture': {
+          value: r
+        },
+        'hasPointerCapture': {
+          value: h
+        }
+      });
+    }
+  }
+
+  applyAttributeStyles();
+  applyPolyfill();
+  applyPolyfill$1();
+
+  var pointerevents = {
+    dispatcher: dispatcher,
+    Installer: Installer,
+    PointerEvent: PointerEvent,
+    PointerMap: PointerMap,
+    targetFinding: targeting
+  };
+
+  return pointerevents;
+
+}));
+});
+
 /**
  * @license
  * Copyright (c) 2017 The Polymer Project Authors. All rights reserved.
@@ -1359,7 +2900,7 @@ const render = (result, container, options) => {
 const isBrowser = typeof window !== 'undefined';
 if (isBrowser) {
     // If we run in the browser set version
-    (window['litHtmlVersions'] || (window['litHtmlVersions'] = [])).push('1.1.5');
+    (window['litHtmlVersions'] || (window['litHtmlVersions'] = [])).push('1.1.7');
 }
 /**
  * Interprets a template literal as an HTML template that can efficiently
@@ -3051,329 +4592,235 @@ function Vido(state, api) {
         }
     }
     const PublicComponentMethods = getPublicComponentMethods(components, actionsByInstance, clone);
-    /**
-     * Create vido instance for component
-     */
-    function vido() {
-        this.destroyable = [];
-        this.onChangeFunctions = [];
-        this.debug = false;
-        this.state = state;
-        this.api = api;
-        this.lastProps = {};
-        this.reuseComponents = this.reuseComponents.bind(this);
-        this.onDestroy = this.onDestroy.bind(this);
-        this.onChange = this.onChange.bind(this);
-        this.update = this.update.bind(this);
-        for (const name in additionalMethods) {
-            this[name] = additionalMethods[name];
-        }
-    }
-    vido.prototype.html = html;
-    vido.prototype.svg = svg;
-    vido.prototype.directive = directive;
-    vido.prototype.asyncAppend = asyncAppend;
-    vido.prototype.asyncReplace = asyncReplace;
-    vido.prototype.cache = cache;
-    vido.prototype.classMap = classMap;
-    vido.prototype.guard = guard;
-    vido.prototype.ifDefined = ifDefined;
-    vido.prototype.repeat = repeat;
-    vido.prototype.unsafeHTML = unsafeHTML;
-    vido.prototype.until = until;
-    vido.prototype.schedule = schedule;
-    vido.prototype.actionsByInstance = (componentActions, props) => { };
-    vido.prototype.StyleMap = StyleMap;
-    vido.prototype.Detach = Detach;
-    vido.prototype.PointerAction = PointerAction;
-    vido.prototype.addMethod = function addMethod(name, body) {
-        additionalMethods[name] = body;
-    };
-    vido.prototype.Action = Action;
-    vido.prototype.onDestroy = function onDestroy(fn) {
-        this.destroyable.push(fn);
-    };
-    vido.prototype.onChange = function onChange(fn) {
-        this.onChangeFunctions.push(fn);
-    };
-    vido.prototype.update = function update(callback) {
-        return this.updateTemplate(callback);
-    };
-    /**
-     * Reuse existing components when your data was changed
-     *
-     * @param {array} currentComponents - array of components
-     * @param {array} dataArray  - any data as array for each component
-     * @param {function} getProps - you can pass params to component from array item ( example: item=>({id:item.id}) )
-     * @param {function} component - what kind of components do you want to create?
-     * @param {boolean} leaveTail - leave last elements and do not destroy corresponding components
-     * @returns {array} of components (with updated/destroyed/created ones)
-     */
-    vido.prototype.reuseComponents = function reuseComponents(currentComponents, dataArray, getProps, component, leaveTail = true) {
-        const modified = [];
-        const currentLen = currentComponents.length;
-        const dataLen = dataArray.length;
-        let leave = false;
-        if (leaveTail && (dataArray === undefined || dataArray.length === 0)) {
-            leave = true;
-        }
-        let leaveStartingAt = 0;
-        if (currentLen < dataLen) {
-            let diff = dataLen - currentLen;
-            while (diff) {
-                const item = dataArray[dataLen - diff];
-                const newComponent = this.createComponent(component, getProps(item));
-                currentComponents.push(newComponent);
-                modified.push(newComponent.instance);
-                diff--;
-            }
-        }
-        else if (currentLen > dataLen) {
-            let diff = currentLen - dataLen;
-            if (leaveTail) {
-                leave = true;
-                leaveStartingAt = currentLen - diff;
-            }
-            while (diff) {
-                const index = currentLen - diff;
-                if (!leaveTail) {
-                    modified.push(currentComponents[index].instance);
-                    currentComponents[index].destroy();
-                }
-                diff--;
-            }
-            if (!leaveTail) {
-                currentComponents.length = dataLen;
-            }
-        }
-        let index = 0;
-        for (const component of currentComponents) {
-            const item = dataArray[index];
-            if (!modified.includes(component.instance)) {
-                component.change(getProps(item), { leave: leave && index >= leaveStartingAt });
-            }
-            index++;
-        }
-    };
     const InternalComponentMethods = getInternalComponentMethods(components, actionsByInstance, clone);
-    /**
-     * Create component
-     *
-     * @param {function} component
-     * @param {any} props
-     * @returns {object} component instance methods
-     */
-    function createComponent(component, props = {}, content = null) {
-        const instance = component.name + ':' + componentId++;
-        let vidoInstance;
-        vidoInstance = new vido();
-        vidoInstance.instance = instance;
-        vidoInstance.name = component.name;
-        vidoInstance.Actions = new InstanceActionsCollector(instance);
-        const publicMethods = new PublicComponentMethods(instance, vidoInstance, props);
-        const internalMethods = new InternalComponentMethods(instance, vidoInstance, component(vidoInstance, props, content), content);
-        components.set(instance, internalMethods);
-        components.get(instance).change(props);
-        if (vidoInstance.debug) {
-            console.groupCollapsed(`component created ${instance}`);
-            console.log(clone({ props, components: components.keys(), actionsByInstance }));
-            console.trace();
-            console.groupEnd();
-        }
-        return publicMethods;
-    }
-    vido.prototype.createComponent = createComponent;
-    class Slot extends Directive {
-        constructor(components, props = {}, content = null) {
-            super();
-            this.components = [];
-            if (Array.isArray(components)) {
-                for (const component of components) {
-                    this.components.push(createComponent(component, props, content));
-                }
-            }
-        }
-        body(part) {
-            part.setValue(this.components.map((component) => component.html()));
-        }
-        change(changedProps, options) {
-            for (const component of this.components) {
-                component.change(changedProps, options);
-            }
-        }
-        getComponents() {
-            return this.components;
-        }
-        setComponents(components) {
-            this.components = components;
-        }
-        destroy() {
-            for (const component of this.components) {
-                component.destroy();
-            }
-        }
-    }
-    vido.prototype.Slot = Slot;
-    class Slots {
+    class vido {
         constructor() {
-            this.slots = {};
-        }
-        addSlot(name, slot) {
-            if (this.slots[name] === undefined) {
-                this.slots[name] = [];
+            this.destroyable = [];
+            this.onChangeFunctions = [];
+            this.debug = false;
+            this.state = state;
+            this.api = api;
+            this.lastProps = {};
+            this.html = html;
+            this.svg = svg;
+            this.directive = directive;
+            this.asyncAppend = asyncAppend;
+            this.asyncReplace = asyncReplace;
+            this.cache = cache;
+            this.classMap = classMap;
+            this.guard = guard;
+            this.ifDefined = ifDefined;
+            this.repeat = repeat;
+            this.unsafeHTML = unsafeHTML;
+            this.until = until;
+            this.schedule = schedule;
+            this.actionsByInstance = (componentActions, props) => { };
+            this.StyleMap = StyleMap;
+            this.Detach = Detach;
+            this.PointerAction = PointerAction;
+            this.Action = Action;
+            this._components = components;
+            this._actions = actionsByInstance;
+            this.reuseComponents = this.reuseComponents.bind(this);
+            this.onDestroy = this.onDestroy.bind(this);
+            this.onChange = this.onChange.bind(this);
+            this.update = this.update.bind(this);
+            for (const name in additionalMethods) {
+                this[name] = additionalMethods[name];
             }
-            this.slots[name].push(slot);
         }
-        change(changedProps, options) {
-            for (const name in this.slots) {
-                for (const slot of this.slots[name]) {
-                    slot.change(changedProps, options);
+        addMethod(name, body) {
+            additionalMethods[name] = body;
+        }
+        onDestroy(fn) {
+            this.destroyable.push(fn);
+        }
+        onChange(fn) {
+            this.onChangeFunctions.push(fn);
+        }
+        update(callback) {
+            return this.updateTemplate(callback);
+        }
+        /**
+         * Reuse existing components when your data was changed
+         *
+         * @param {array} currentComponents - array of components
+         * @param {array} dataArray  - any data as array for each component
+         * @param {function} getProps - you can pass params to component from array item ( example: item=>({id:item.id}) )
+         * @param {function} component - what kind of components do you want to create?
+         * @param {boolean} leaveTail - leave last elements and do not destroy corresponding components
+         * @returns {array} of components (with updated/destroyed/created ones)
+         */
+        reuseComponents(currentComponents, dataArray, getProps, component, leaveTail = true) {
+            const modified = [];
+            const currentLen = currentComponents.length;
+            const dataLen = dataArray.length;
+            let leave = false;
+            if (leaveTail && (dataArray === undefined || dataArray.length === 0)) {
+                leave = true;
+            }
+            let leaveStartingAt = 0;
+            if (currentLen < dataLen) {
+                let diff = dataLen - currentLen;
+                while (diff) {
+                    const item = dataArray[dataLen - diff];
+                    const newComponent = this.createComponent(component, getProps(item));
+                    currentComponents.push(newComponent);
+                    modified.push(newComponent.instance);
+                    diff--;
                 }
             }
-        }
-        destroy() {
-            for (const name in this.slots) {
-                for (const slot of this.slots[name]) {
-                    slot.destroy();
+            else if (currentLen > dataLen) {
+                let diff = currentLen - dataLen;
+                if (leaveTail) {
+                    leave = true;
+                    leaveStartingAt = currentLen - diff;
+                }
+                while (diff) {
+                    const index = currentLen - diff;
+                    if (!leaveTail) {
+                        modified.push(currentComponents[index].instance);
+                        currentComponents[index].destroy();
+                    }
+                    diff--;
+                }
+                if (!leaveTail) {
+                    currentComponents.length = dataLen;
                 }
             }
-        }
-        get(name) {
-            return this.slots[name];
-        }
-        set(name, value) {
-            this.slots[name] = value;
-        }
-    }
-    vido.prototype.Slots = Slots;
-    /**
-     * Destroy component
-     *
-     * @param {string} instance
-     * @param {object} vidoInstance
-     */
-    vido.prototype.destroyComponent = function destroyComponent(instance, vidoInstance) {
-        if (vidoInstance.debug) {
-            console.groupCollapsed(`destroying component ${instance}...`);
-            console.log(clone({ components: components.keys(), actionsByInstance }));
-            console.trace();
-            console.groupEnd();
-        }
-        if (actionsByInstance.has(instance)) {
-            for (const action of actionsByInstance.get(instance)) {
-                if (typeof action.componentAction.destroy === 'function') {
-                    action.componentAction.destroy(action.element, action.props);
+            let index = 0;
+            for (const component of currentComponents) {
+                const item = dataArray[index];
+                if (!modified.includes(component.instance)) {
+                    component.change(getProps(item), { leave: leave && index >= leaveStartingAt });
                 }
+                index++;
             }
         }
-        actionsByInstance.delete(instance);
-        const component = components.get(instance);
-        component.update();
-        component.destroy();
-        components.delete(instance);
-        if (vidoInstance.debug) {
-            console.groupCollapsed(`component destroyed ${instance}`);
-            console.log(clone({ components: components.keys(), actionsByInstance }));
-            console.trace();
-            console.groupEnd();
+        createComponent(component, props = {}, content = null) {
+            const instance = component.name + ':' + componentId++;
+            let vidoInstance;
+            vidoInstance = new vido();
+            vidoInstance.instance = instance;
+            vidoInstance.name = component.name;
+            vidoInstance.Actions = new InstanceActionsCollector(instance);
+            const publicMethods = new PublicComponentMethods(instance, vidoInstance, props);
+            const internalMethods = new InternalComponentMethods(instance, vidoInstance, component(vidoInstance, props, content), content);
+            components.set(instance, internalMethods);
+            components.get(instance).change(props);
+            if (vidoInstance.debug) {
+                console.groupCollapsed(`component created ${instance}`);
+                console.log(clone({ props, components: components.keys(), actionsByInstance }));
+                console.trace();
+                console.groupEnd();
+            }
+            return publicMethods;
         }
-    };
-    /**
-     * Update template - trigger render proccess
-     * @param {object} vidoInstance
-     */
-    vido.prototype.updateTemplate = function updateTemplate(callback) {
-        return new Promise((resolve) => {
-            const currentShouldUpdateCount = ++shouldUpdateCount;
-            const self = this;
-            function flush() {
-                if (currentShouldUpdateCount === shouldUpdateCount) {
-                    shouldUpdateCount = 0;
-                    self.render();
-                    if (typeof callback === 'function')
-                        callback();
-                    resolve();
+        destroyComponent(instance, vidoInstance) {
+            if (vidoInstance.debug) {
+                console.groupCollapsed(`destroying component ${instance}...`);
+                console.log(clone({ components: components.keys(), actionsByInstance }));
+                console.trace();
+                console.groupEnd();
+            }
+            if (actionsByInstance.has(instance)) {
+                for (const action of actionsByInstance.get(instance)) {
+                    if (typeof action.componentAction.destroy === 'function') {
+                        action.componentAction.destroy(action.element, action.props);
+                    }
                 }
             }
-            resolved.then(flush);
-        });
-    };
-    /**
-     * Create app
-     *
-     * @param config
-     * @returns {object} component instance methods
-     */
-    vido.prototype.createApp = function createApp(config) {
-        element = config.element;
-        const App = this.createComponent(config.component, config.props);
-        app = App.instance;
-        this.render();
-        return App;
-    };
-    /**
-     * Execute actions
-     */
-    vido.prototype.executeActions = function executeActions() {
-        var _a, _b, _c;
-        for (const actions of actionsByInstance.values()) {
-            for (const action of actions) {
-                if (action.element.vido === undefined) {
-                    const componentAction = action.componentAction;
-                    const create = componentAction.create;
-                    if (typeof create !== 'undefined') {
-                        let result;
-                        if (((_a = create.prototype) === null || _a === void 0 ? void 0 : _a.isAction) !== true &&
-                            create.isAction === undefined &&
-                            ((_b = create.prototype) === null || _b === void 0 ? void 0 : _b.update) === undefined &&
-                            ((_c = create.prototype) === null || _c === void 0 ? void 0 : _c.destroy) === undefined) {
-                            result = create(action.element, action.props);
-                        }
-                        else {
-                            result = new create(action.element, action.props);
-                        }
-                        if (result !== undefined) {
-                            if (typeof result === 'function') {
-                                componentAction.destroy = result;
+            actionsByInstance.delete(instance);
+            const component = components.get(instance);
+            component.update();
+            component.destroy();
+            components.delete(instance);
+            if (vidoInstance.debug) {
+                console.groupCollapsed(`component destroyed ${instance}`);
+                console.log(clone({ components: components.keys(), actionsByInstance }));
+                console.trace();
+                console.groupEnd();
+            }
+        }
+        executeActions() {
+            var _a, _b, _c;
+            for (const actions of actionsByInstance.values()) {
+                for (const action of actions) {
+                    if (action.element.vido === undefined) {
+                        const componentAction = action.componentAction;
+                        const create = componentAction.create;
+                        if (typeof create !== 'undefined') {
+                            let result;
+                            if (((_a = create.prototype) === null || _a === void 0 ? void 0 : _a.isAction) !== true &&
+                                create.isAction === undefined &&
+                                ((_b = create.prototype) === null || _b === void 0 ? void 0 : _b.update) === undefined &&
+                                ((_c = create.prototype) === null || _c === void 0 ? void 0 : _c.destroy) === undefined) {
+                                result = create(action.element, action.props);
                             }
                             else {
-                                if (typeof result.update === 'function') {
-                                    componentAction.update = result.update.bind(result);
+                                result = new create(action.element, action.props);
+                            }
+                            if (result !== undefined) {
+                                if (typeof result === 'function') {
+                                    componentAction.destroy = result;
                                 }
-                                if (typeof result.destroy === 'function') {
-                                    componentAction.destroy = result.destroy.bind(result);
+                                else {
+                                    if (typeof result.update === 'function') {
+                                        componentAction.update = result.update.bind(result);
+                                    }
+                                    if (typeof result.destroy === 'function') {
+                                        componentAction.destroy = result.destroy.bind(result);
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                else {
-                    action.element.vido = action.props;
-                    if (typeof action.componentAction.update === 'function') {
-                        action.componentAction.update(action.element, action.props);
+                    else {
+                        action.element.vido = action.props;
+                        if (typeof action.componentAction.update === 'function') {
+                            action.componentAction.update(action.element, action.props);
+                        }
                     }
                 }
+                for (const action of actions) {
+                    action.element.vido = action.props;
+                }
             }
-            for (const action of actions) {
-                action.element.vido = action.props;
+        }
+        updateTemplate(callback) {
+            return new Promise((resolve) => {
+                const currentShouldUpdateCount = ++shouldUpdateCount;
+                const self = this;
+                function flush() {
+                    if (currentShouldUpdateCount === shouldUpdateCount) {
+                        shouldUpdateCount = 0;
+                        self.render();
+                        if (typeof callback === 'function')
+                            callback();
+                        resolve();
+                    }
+                }
+                resolved.then(flush);
+            });
+        }
+        createApp(config) {
+            element = config.element;
+            const App = this.createComponent(config.component, config.props);
+            app = App.instance;
+            this.render();
+            return App;
+        }
+        render() {
+            const appComponent = components.get(app);
+            if (appComponent) {
+                render(appComponent.update(), element);
+                this.executeActions();
+            }
+            else if (element) {
+                element.remove();
             }
         }
-    };
-    /**
-     * Render view
-     */
-    vido.prototype.render = function renderView() {
-        const appComponent = components.get(app);
-        if (appComponent) {
-            render(appComponent.update(), element);
-            this.executeActions();
-        }
-        else if (element) {
-            element.remove();
-        }
-    };
-    vido.prototype._components = components;
-    vido.prototype._actions = actionsByInstance;
+    }
     return new vido();
 }
 Vido.prototype.lithtml = lithtml;
@@ -4361,9 +5808,8 @@ function Main(vido, props = {}) {
     let wrapper;
     onDestroy(state.subscribe('config.wrappers.Main', value => (wrapper = value)));
     const componentActions = api.getActions('main');
-    let className, classNameVerticalScroll;
-    const styleMap = new StyleMap({}), verticalScrollStyleMap = new StyleMap({}), verticalScrollAreaStyleMap = new StyleMap({});
-    let verticalScrollBarElement;
+    let className;
+    const styleMap = new StyleMap({});
     let rowsHeight = 0;
     let resizerActive = false;
     /**
@@ -4376,7 +5822,6 @@ function Main(vido, props = {}) {
         if (resizerActive) {
             className += ` ${componentName}__list-column-header-resizer--active`;
         }
-        classNameVerticalScroll = api.getClass('vertical-scroll', { config });
         update();
     };
     onDestroy(state.subscribe('config.classNames', updateClassNames));
@@ -4385,16 +5830,13 @@ function Main(vido, props = {}) {
      */
     function heightChange() {
         const config = state.get('config');
-        const scrollBarHeight = state.get('_internal.scrollBarHeight');
+        const scrollBarHeight = state.get('config.scroll.horizontal.size');
         const height = config.height - config.headerHeight - scrollBarHeight;
-        state.update('_internal.height', height);
+        state.update('_internal.innerHeight', height);
         styleMap.style['--height'] = config.height + 'px';
-        verticalScrollStyleMap.style.height = height + 'px';
-        verticalScrollStyleMap.style.width = scrollBarHeight + 'px';
-        verticalScrollStyleMap.style['margin-top'] = config.headerHeight + 'px';
         update();
     }
-    onDestroy(state.subscribeAll(['config.height', 'config.headerHeight', '_internal.scrollBarHeight'], heightChange));
+    onDestroy(state.subscribeAll(['config.height', 'config.headerHeight', 'config.scroll.horizontal.size'], heightChange));
     /**
      * Resizer active change
      * @param {boolean} active
@@ -4448,15 +5890,32 @@ function Main(vido, props = {}) {
         update();
     }
     onDestroy(state.subscribeAll(['config.list.rows.*.expanded', '_internal.treeMap;', 'config.list.rows.*.height'], prepareExpanded, { bulk: true }));
+    function getLastPageRowsHeight(innerHeight, rowsWithParentsExpanded) {
+        if (rowsWithParentsExpanded.length === 0)
+            return 0;
+        let currentHeight = 0;
+        for (let i = rowsWithParentsExpanded.length - 1; i >= 0; i--) {
+            const row = rowsWithParentsExpanded[i];
+            currentHeight += row.height;
+            if (currentHeight >= innerHeight)
+                return currentHeight - row.height;
+        }
+        return currentHeight;
+    }
+    onDestroy(state.subscribeAll(['_internal.list.rowsWithParentsExpanded;', '_internal.innerHeight', '_internal.list.rowsHeight'], () => {
+        const rowsWithParentsExpanded = state.get('_internal.list.rowsWithParentsExpanded');
+        const rowsHeight = state.get('_internal.list.rowsHeight');
+        const innerHeight = state.get('_internal.innerHeight');
+        const lastPageHeight = getLastPageRowsHeight(innerHeight, rowsWithParentsExpanded);
+        state.update('config.scroll.vertical.area', rowsHeight - lastPageHeight);
+    }));
     /**
      * Generate visible rows
      */
     function generateVisibleRowsAndItems() {
-        const { visibleRows, compensation } = api.getVisibleRowsAndCompensation(state.get('_internal.list.rowsWithParentsExpanded'));
-        const smoothScroll = state.get('config.scroll.smooth');
+        const visibleRows = api.getVisibleRows(state.get('_internal.list.rowsWithParentsExpanded'));
         const currentVisibleRows = state.get('_internal.list.visibleRows');
         let shouldUpdate = true;
-        state.update('config.scroll.compensation.y', smoothScroll ? -compensation : 0);
         if (visibleRows.length !== currentVisibleRows.length) {
             shouldUpdate = true;
         }
@@ -4480,63 +5939,67 @@ function Main(vido, props = {}) {
         state.update('_internal.chart.visibleItems', visibleItems);
         update();
     }
-    onDestroy(state.subscribeAll(['_internal.list.rowsWithParentsExpanded;', 'config.scroll.top', 'config.chart.items'], generateVisibleRowsAndItems, { bulk: true }));
-    let elementScrollTop = 0;
-    function onVisibleRowsChange() {
-        const top = state.get('config.scroll.top');
-        verticalScrollAreaStyleMap.style.width = '1px';
-        verticalScrollAreaStyleMap.style.height = rowsHeight + 'px';
-        if (elementScrollTop !== top && verticalScrollBarElement) {
-            elementScrollTop = top;
-            verticalScrollBarElement.scrollTop = top;
+    onDestroy(state.subscribeAll(['_internal.list.rowsWithParentsExpanded;', 'config.scroll.vertical.item', 'config.chart.items'], generateVisibleRowsAndItems, { bulk: true }));
+    function getLastPageDatesWidth(chartWidth, allDates) {
+        if (allDates.length === 0)
+            return 0;
+        let currentWidth = 0;
+        for (let i = allDates.length - 1; i >= 0; i--) {
+            const date = allDates[i];
+            currentWidth += date.width;
+            if (currentWidth >= chartWidth)
+                return currentWidth - date.width;
         }
-        update();
+        return currentWidth;
     }
-    onDestroy(state.subscribe('_internal.list.visibleRows;', onVisibleRowsChange));
-    /**
-     * Generate and add period dates
-     * @param {string} period
-     * @param {object} internalTime
-     */
-    const generatePeriodDates = (period, internalTime) => {
+    const generatePeriodDates = (formatting, time, level, levelIndex) => {
+        const period = formatting.period;
         const dates = [];
-        let leftGlobal = internalTime.leftGlobal;
-        const timePerPixel = internalTime.timePerPixel;
-        let startOfLeft = api.time
-            .date(leftGlobal)
-            .startOf(period)
-            .valueOf();
-        if (startOfLeft < leftGlobal)
-            startOfLeft = leftGlobal;
-        let sub = leftGlobal - startOfLeft;
-        let subPx = sub / timePerPixel;
+        let finalFrom = time.finalFrom;
+        let leftDate = api.time.date(finalFrom);
+        const timePerPixel = time.timePerPixel;
+        if (!timePerPixel)
+            return [];
         let leftPx = 0;
         const diff = Math.ceil(api.time
-            .date(internalTime.rightGlobal)
+            .date(time.finalTo)
             .endOf(period)
-            .diff(api.time.date(leftGlobal).startOf(period), period, true));
+            .diff(leftDate, period, true));
+        const className = api.getClass('chart-calendar-date');
+        const currentDate = api.time.date().startOf(period);
         for (let i = 0; i < diff; i++) {
-            const date = {
-                sub,
-                subPx,
-                leftGlobal,
-                rightGlobal: api.time
-                    .date(leftGlobal)
-                    .endOf(period)
-                    .valueOf(),
+            const rightGlobalDate = leftDate.endOf(period);
+            let date = {
+                leftGlobal: leftDate.valueOf(),
+                leftGlobalDate: leftDate,
+                rightGlobalDate,
+                rightGlobal: rightGlobalDate.valueOf(),
                 width: 0,
                 leftPx: 0,
                 rightPx: 0,
-                period
+                period,
+                formatted: null,
+                current: leftDate.valueOf() === currentDate.valueOf(),
+                previous: leftDate.add(1, period).valueOf() === currentDate.valueOf(),
+                next: leftDate.subtract(1, period).valueOf() === currentDate.valueOf()
             };
-            date.width = (date.rightGlobal - date.leftGlobal + sub) / timePerPixel;
+            date.formatted = formatting.format({
+                timeStart: leftDate,
+                timeEnd: rightGlobalDate,
+                vido,
+                className,
+                props: { date }
+            });
+            time.onLevelDate.forEach(onLevelDate => {
+                date = onLevelDate(date, period, level, levelIndex);
+            });
+            const diffMs = date.rightGlobalDate.diff(date.leftGlobalDate, 'millisecond');
+            date.width = diffMs / timePerPixel;
             date.leftPx = leftPx;
             leftPx += date.width;
             date.rightPx = leftPx;
             dates.push(date);
-            leftGlobal = date.rightGlobal + 1;
-            sub = 0;
-            subPx = 0;
+            leftDate = leftDate.add(1, period).startOf(period);
         }
         return dates;
     };
@@ -4552,18 +6015,30 @@ function Main(vido, props = {}) {
         });
         state.update('_internal.loadedEventTriggered', true);
     }
-    function limitGlobalAndSetCenter(time) {
+    function limitGlobalAndSetCenter(time, updateCenter = true, oldTime) {
         if (time.leftGlobal < time.finalFrom)
             time.leftGlobal = time.finalFrom;
         if (time.rightGlobal > time.finalTo)
             time.rightGlobal = time.finalTo;
-        time.centerGlobal = time.leftGlobal + Math.round((time.rightGlobal - time.leftGlobal) / 2);
+        time.leftGlobalDate = api.time.date(time.leftGlobal).startOf(time.period);
+        time.leftGlobal = time.leftGlobalDate.valueOf();
+        time.rightGlobalDate = api.time.date(time.rightGlobal).endOf(time.period);
+        time.rightGlobal = time.rightGlobalDate.valueOf();
+        if (updateCenter) {
+            time.centerGlobal = time.leftGlobal + Math.round((time.rightGlobal - time.leftGlobal) / 2);
+            time.centerGlobalDate = api.time.date(time.centerGlobal);
+            time.centerGlobal = time.centerGlobalDate.valueOf();
+        }
+        else {
+            time.centerGlobal = oldTime.centerGlobal;
+            time.centerGlobalDate = oldTime.centerGlobalDate;
+        }
         return time;
     }
-    function guessPeriod(time, calendar) {
+    function guessPeriod(time, levels) {
         if (!time.zoom)
             return time;
-        for (const level of calendar.levels) {
+        for (const level of levels) {
             const formatting = level.formats.find(format => +time.zoom <= +format.zoomTo);
             if (formatting && level.main) {
                 time.period = formatting.period;
@@ -4571,38 +6046,135 @@ function Main(vido, props = {}) {
         }
         return time;
     }
-    function updateLevels(time, calendar) {
+    function calculateDatesPercents(allMainDates, chartWidth) {
+        const lastPageWidth = getLastPageDatesWidth(chartWidth, allMainDates);
+        let totalWidth = 0;
+        for (const date of allMainDates) {
+            totalWidth += date.width;
+        }
+        const scrollWidth = totalWidth - lastPageWidth;
+        for (const date of allMainDates) {
+            date.leftPercent = date.leftPx / scrollWidth;
+            date.rightPercent = date.rightPx / scrollWidth;
+        }
+        return scrollWidth;
+    }
+    function generateAllDates(time, levels, chartWidth) {
+        if (!time.zoom)
+            return 0;
+        time.allDates = [];
+        let levelIndex = 0;
+        for (const level of levels) {
+            const formatting = level.formats.find(format => +time.zoom <= +format.zoomTo);
+            let dates = generatePeriodDates(formatting, time, level, levelIndex);
+            time.onLevelDates.forEach(onLevelDates => {
+                dates = onLevelDates(dates, formatting, time, level, levelIndex);
+            });
+            time.allDates.push(dates);
+            levelIndex++;
+        }
+        time.onAllLevelDates.forEach(onAllLevelDates => {
+            time.allDates = onAllLevelDates(time.allDates, time);
+        });
+        return calculateDatesPercents(time.allDates[time.level], chartWidth);
+    }
+    function getPeriodDates(allLevelDates, time) {
+        if (!allLevelDates.length)
+            return [];
+        const filtered = allLevelDates.filter(date => {
+            return ((date.leftGlobal >= time.leftGlobal && date.leftGlobal <= time.rightGlobal) ||
+                (date.rightGlobal >= time.leftGlobal && date.rightGlobal <= time.rightGlobal) ||
+                (date.leftGlobal <= time.leftGlobal && date.rightGlobal >= time.rightGlobal) ||
+                (date.leftGlobal >= time.leftGlobal && date.rightGlobal <= time.rightGlobal));
+        });
+        if (!filtered.length)
+            return [];
+        let firstLeftDiff = 0;
+        if (filtered[0].period !== time.period && time.leftGlobal > filtered[0].leftGlobal) {
+            firstLeftDiff = api.time.getDatesDiffPx(time.leftGlobal, filtered[0].leftGlobal, time.allDates[time.level]);
+        }
+        let leftPx = 0;
+        return filtered.map(date => {
+            date.currentView = {
+                leftPx,
+                rightPx: date.rightPx,
+                width: date.width
+            };
+            if (firstLeftDiff < 0) {
+                date.currentView.width = date.width + firstLeftDiff;
+                date.currentView.leftPx = 0;
+                firstLeftDiff = 0;
+            }
+            date.currentView.rightPx = date.currentView.leftPx + date.currentView.width;
+            leftPx += date.currentView.width;
+            return date;
+        });
+    }
+    function updateLevels(time, levels) {
         time.levels = [];
-        let index = 0;
-        for (const level of calendar.levels) {
+        let levelIndex = 0;
+        for (const level of levels) {
             const formatting = level.formats.find(format => +time.zoom <= +format.zoomTo);
             if (level.main) {
                 time.format = formatting;
-                time.level = index;
+                time.level = levelIndex;
             }
             if (formatting) {
-                time.levels.push(generatePeriodDates(formatting.period, time));
+                let dates = getPeriodDates(time.allDates[levelIndex], time);
+                time.onCurrentViewLevelDates.forEach(onCurrentViewLevelDates => {
+                    dates = onCurrentViewLevelDates(dates, formatting, time, level, levelIndex);
+                });
+                time.levels.push(dates);
             }
-            index++;
+            levelIndex++;
         }
+    }
+    function calculateTotalViewDuration(time) {
+        let width = 0;
+        let ms = 0;
+        for (const date of time.allDates[time.level]) {
+            width += date.width;
+            ms += date.rightGlobal - date.leftGlobal;
+        }
+        time.totalViewDurationPx = width;
+        time.totalViewDurationMs = ms;
+    }
+    function calculateRightGlobal(leftGlobal, chartWidth, allMainDates) {
+        const date = api.time.findDateAtTime(leftGlobal, allMainDates);
+        const index = allMainDates.indexOf(date);
+        let rightGlobal = date.leftGlobal;
+        let width = 0;
+        for (let i = index, len = allMainDates.length; i < len; i++) {
+            const currentDate = allMainDates[i];
+            rightGlobal = currentDate.leftGlobal;
+            width += currentDate.width;
+            if (width >= chartWidth)
+                break;
+        }
+        return rightGlobal;
     }
     let working = false;
     function recalculateTimes(reason) {
         if (working)
             return;
-        working = true;
-        const configTime = state.get('config.chart.time');
         const chartWidth = state.get('_internal.chart.dimensions.width');
+        if (!chartWidth)
+            return;
+        const configTime = state.get('config.chart.time');
         const calendar = state.get('config.chart.calendar');
         const oldTime = Object.assign({}, state.get('_internal.chart.time'));
         let time = api.mergeDeep({}, configTime);
         if ((!time.from || !time.to) && !Object.keys(state.get('config.chart.items')).length) {
             return;
         }
-        let mainLevel = calendar.levels.find(level => level.main);
+        time.fromDate = api.time.date(time.from);
+        time.toDate = api.time.date(time.to);
+        const mainLevel = calendar.levels.find(level => level.main);
         if (!mainLevel) {
             throw new Error('Main calendar level not found (config.chart.calendar.levels).');
         }
+        const mainLevelIndex = calendar.levels.indexOf(mainLevel);
+        time.level = mainLevelIndex;
         if (!time.calculatedZoomMode) {
             if (time.period !== oldTime.period) {
                 let periodFormat = mainLevel.formats.find(format => format.period === time.period && format.default);
@@ -4610,15 +6182,16 @@ function Main(vido, props = {}) {
                     time.zoom = periodFormat.zoomTo;
                 }
             }
-            guessPeriod(time, calendar);
+            guessPeriod(time, calendar.levels);
         }
         // If _internal.chart.time (leftGlobal, centerGlobal, rightGlobal, from , to) was changed
         // then we need to apply those values - no recalculation is needed (values form plugins etc)
         const justApply = ['leftGlobal', 'centerGlobal', 'rightGlobal', 'from', 'to'].includes(reason.name);
         if (justApply) {
-            time = Object.assign(Object.assign({}, time), { leftGlobal: configTime.leftGlobal, centerGlobal: configTime.centerGlobal, rightGlobal: configTime.rightGlobal, from: configTime.from, to: configTime.to });
+            time = Object.assign(Object.assign({}, time), { leftGlobal: configTime.leftGlobal, leftGlobalDate: api.time.date(configTime.leftGlobal), centerGlobal: configTime.centerGlobal, centerGlobalDate: api.time.date(configTime.centerGlobal), rightGlobal: configTime.rightGlobal, rightGlobalDate: api.time.date(configTime.rightGlobal), from: configTime.from, fromDate: api.time.date(configTime.from), to: configTime.to, toDate: api.time.date(configTime.to) });
         }
-        let scrollLeft = 0;
+        let horizontalScroll = state.get('config.scroll.horizontal');
+        let scrollWidth = 0;
         // source of everything = time.timePerPixel
         if (time.calculatedZoomMode && chartWidth) {
             time.finalFrom = time.from;
@@ -4626,18 +6199,38 @@ function Main(vido, props = {}) {
             time.totalViewDurationMs = api.time.date(time.finalTo).diff(time.finalFrom, 'milliseconds');
             time.timePerPixel = time.totalViewDurationMs / chartWidth;
             time.zoom = Math.log(time.timePerPixel) / Math.log(2);
-            guessPeriod(time, calendar);
-            time.totalViewDurationPx = Math.round(time.totalViewDurationMs / time.timePerPixel);
+            guessPeriod(time, calendar.levels);
+            if (oldTime.zoom !== time.zoom || time.allDates.length === 0 || time.forceUpdate) {
+                scrollWidth = generateAllDates(time, calendar.levels, chartWidth);
+                calculateTotalViewDuration(time);
+                const all = time.allDates[time.level];
+                time.finalTo = all[all.length - 1].leftGlobal;
+            }
             time.leftGlobal = time.from;
+            time.leftGlobalDate = api.time.date(time.leftGlobal);
             time.rightGlobal = time.to;
+            time.rightGlobalDate = api.time.date(time.rightGlobal);
         }
         else {
             time.timePerPixel = Math.pow(2, time.zoom);
             time = api.time.recalculateFromTo(time);
-            time.totalViewDurationMs = api.time.date(time.finalTo).diff(time.finalFrom, 'milliseconds');
-            time.totalViewDurationPx = Math.round(time.totalViewDurationMs / time.timePerPixel);
-            scrollLeft = state.get('config.scroll.left');
+            if (oldTime.zoom !== time.zoom || time.allDates.length === 0 || time.forceUpdate) {
+                scrollWidth = generateAllDates(time, calendar.levels, chartWidth);
+                calculateTotalViewDuration(time);
+                const all = time.allDates[time.level];
+                time.finalTo = all[all.length - 1].leftGlobal;
+            }
+            else {
+                time.totalViewDurationPx = oldTime.totalViewDurationPx;
+                time.totalViewDurationMs = oldTime.totalViewDurationMs;
+            }
         }
+        if (scrollWidth)
+            horizontalScroll.area = scrollWidth;
+        time.finalFromDate = api.time.date(time.finalFrom);
+        time.finalToDate = api.time.date(time.finalTo);
+        const allMainDates = time.allDates[mainLevelIndex];
+        let updateCenter = false;
         if (!justApply && !time.calculatedZoomMode) {
             // If time.zoom (or time.period) has been changed
             // then we need to recalculate basing on time.centerGlobal
@@ -4647,28 +6240,51 @@ function Main(vido, props = {}) {
             if (time.zoom !== oldTime.zoom && oldTime.centerGlobal) {
                 const chartWidthInMs = chartWidth * time.timePerPixel;
                 const halfChartInMs = Math.round(chartWidthInMs / 2);
-                time.leftGlobal = oldTime.centerGlobal - halfChartInMs;
-                time.rightGlobal = time.leftGlobal + chartWidthInMs;
-                scrollLeft = (time.leftGlobal - time.finalFrom) / time.timePerPixel;
-                scrollLeft = api.limitScrollLeft(time.totalViewDurationPx, chartWidth, scrollLeft);
+                const diff = Math.ceil(oldTime.centerGlobalDate.diff(oldTime.centerGlobal + halfChartInMs, time.period, true));
+                time.leftGlobalDate = oldTime.centerGlobalDate.add(diff, time.period);
+                const milliseconds = time.leftGlobalDate.valueOf();
+                let date = api.time.findDateAtTime(milliseconds, allMainDates);
+                if (!date)
+                    date = allMainDates[0];
+                time.leftGlobal = date.leftGlobal;
+                time.leftGlobalDate = date.leftGlobalDate;
+                time.rightGlobal = calculateRightGlobal(time.leftGlobal, chartWidth, allMainDates);
+                time.rightGlobalDate = api.time.date(time.rightGlobal).endOf(time.period);
+                time.rightGlobal = time.rightGlobalDate.valueOf();
+                if (allMainDates.length) {
+                    let date = api.time.findDateAtTime(time.leftGlobal, allMainDates);
+                    if (!date) {
+                        date = allMainDates[0];
+                    }
+                    horizontalScroll.item = date;
+                }
             }
             else {
-                time.leftGlobal = scrollLeft * time.timePerPixel + time.finalFrom;
-                time.rightGlobal = time.leftGlobal + chartWidth * time.timePerPixel;
+                let date = horizontalScroll.item;
+                if (!date) {
+                    date = allMainDates[0];
+                }
+                time.leftGlobalDate = date.leftGlobalDate.clone();
+                time.leftGlobal = time.leftGlobalDate.valueOf();
+                time.rightGlobal = calculateRightGlobal(time.leftGlobal, chartWidth, allMainDates);
+                time.rightGlobalDate = api.time.date(time.rightGlobal).endOf(time.period);
+                time.rightGlobal = time.rightGlobal.valueOf();
+                updateCenter = true;
             }
         }
-        limitGlobalAndSetCenter(time);
+        limitGlobalAndSetCenter(time, updateCenter, oldTime);
         time.leftInner = time.leftGlobal - time.finalFrom;
         time.rightInner = time.rightGlobal - time.finalFrom;
-        time.leftPx = time.leftInner / time.timePerPixel;
-        time.rightPx = time.rightInner / time.timePerPixel;
-        updateLevels(time, calendar);
-        let xCompensation = 0;
-        if (time.levels[time.level] && time.levels[time.level].length !== 0) {
-            xCompensation = time.levels[time.level][0].subPx;
+        time.leftPx = 0;
+        time.rightPx = chartWidth;
+        time.width = chartWidth;
+        const mainLevelDates = time.levels[time.level];
+        if (mainLevelDates && mainLevelDates.length) {
+            time.leftPx = mainLevelDates[0].leftPx;
+            time.rightPx = mainLevelDates[mainLevelDates.length - 1].leftPx;
         }
+        updateLevels(time, calendar.levels);
         state.update(`_internal.chart.time`, time);
-        state.update('config.scroll.compensation.x', xCompensation);
         state.update('config.chart.time', configTime => {
             configTime.zoom = time.zoom;
             configTime.period = time.format.period;
@@ -4679,9 +6295,11 @@ function Main(vido, props = {}) {
             configTime.to = time.to;
             configTime.finalFrom = time.finalFrom;
             configTime.finalTo = time.finalTo;
+            configTime.allDates = time.allDates;
+            configTime.forceUpdate = false;
             return configTime;
         });
-        state.update('config.scroll.left', scrollLeft);
+        state.update('config.scroll.horizontal', horizontalScroll);
         update().then(() => {
             if (!state.get('_internal.loaded.time')) {
                 state.update('_internal.loaded.time', true);
@@ -4693,7 +6311,7 @@ function Main(vido, props = {}) {
         initialized: false,
         zoom: 0,
         period: '',
-        scrollLeft: 0,
+        scrollItem: 0,
         chartWidth: 0,
         leftGlobal: 0,
         centerGlobal: 0,
@@ -4703,7 +6321,7 @@ function Main(vido, props = {}) {
     };
     function recalculationIsNeeded() {
         const configTime = state.get('config.chart.time');
-        const scrollLeft = state.get('config.scroll.left');
+        const scrollItem = state.get('config.scroll.horizontal.item');
         const chartWidth = state.get('_internal.chart.dimensions.width');
         const cache = Object.assign({}, recalculationTriggerCache);
         recalculationTriggerCache.zoom = configTime.zoom;
@@ -4713,12 +6331,14 @@ function Main(vido, props = {}) {
         recalculationTriggerCache.rightGlobal = configTime.rightGlobal;
         recalculationTriggerCache.from = configTime.from;
         recalculationTriggerCache.to = configTime.to;
-        recalculationTriggerCache.scrollLeft = scrollLeft;
+        recalculationTriggerCache.scrollItem = scrollItem;
         recalculationTriggerCache.chartWidth = chartWidth;
         if (!recalculationTriggerCache.initialized) {
             recalculationTriggerCache.initialized = true;
             return { name: 'all' };
         }
+        if (configTime.forceUpdate === true)
+            return { name: 'forceUpdate' };
         if (configTime.zoom !== cache.zoom)
             return { name: 'zoom', oldValue: cache.zoom, newValue: configTime.zoom };
         if (configTime.period !== cache.period)
@@ -4733,19 +6353,22 @@ function Main(vido, props = {}) {
             return { name: 'from', oldValue: cache.from, newValue: configTime.from };
         if (configTime.to !== cache.to)
             return { name: 'to', oldValue: cache.to, newValue: configTime.to };
-        if (scrollLeft !== cache.scrollLeft)
-            return { name: 'scroll', oldValue: cache.scrollLeft, newValue: scrollLeft };
+        if (scrollItem !== cache.scrollItem)
+            return { name: 'scroll', oldValue: cache.scrollItem, newValue: scrollItem };
         if (chartWidth !== cache.chartWidth)
             return { name: 'chartWidth', oldValue: cache.chartWidth, newValue: chartWidth };
         return false;
     }
-    onDestroy(state.subscribeAll(['config.chart.time', 'config.chart.calendar.levels', 'config.scroll.left', '_internal.chart.dimensions.width'], () => {
+    onDestroy(state.subscribeAll([
+        'config.chart.time',
+        'config.chart.calendar.levels',
+        'config.scroll.horizontal.item',
+        '_internal.chart.dimensions.width'
+    ], () => {
         let reason = recalculationIsNeeded();
         if (reason)
             recalculateTimes(reason);
     }, { bulk: true }));
-    // When time.from and time.to is not specified and items are reloaded;
-    // check if item is outside current time scope and extend it if needed
     onDestroy(state.subscribe('config.chart.items.*.time', items => {
         recalculateTimes({ name: 'items' });
     }, { bulk: true }));
@@ -4764,47 +6387,6 @@ function Main(vido, props = {}) {
         }
         catch (e) { }
     }
-    let scrollTop = 0;
-    let propagate = true;
-    onDestroy(state.subscribe('config.scroll.propagate', prpgt => (propagate = prpgt)));
-    /**
-     * Handle scroll Event
-     * @param {MouseEvent} event
-     */
-    function handleEvent(event) {
-        if (!propagate) {
-            event.stopPropagation();
-            event.preventDefault();
-        }
-        if (event.type === 'scroll') {
-            // @ts-ignore
-            const top = event.target.scrollTop;
-            /**
-             * Handle on scroll event
-             * @param {object} scroll
-             * @returns {object} scroll
-             */
-            const handleOnScroll = scroll => {
-                scroll.top = top;
-                scrollTop = scroll.top;
-                const scrollInner = state.get('_internal.elements.vertical-scroll-inner');
-                if (scrollInner) {
-                    const scrollHeight = scrollInner.clientHeight;
-                    scroll.percent.top = scroll.top / scrollHeight;
-                }
-                return scroll;
-            };
-            if (scrollTop !== top)
-                state.update('config.scroll', handleOnScroll, {
-                    only: ['top', 'percent.top']
-                });
-        }
-    }
-    const onScroll = {
-        handleEvent,
-        passive: false,
-        capture: false
-    };
     const dimensions = { width: 0, height: 0 };
     let ro;
     /**
@@ -4838,16 +6420,6 @@ function Main(vido, props = {}) {
     onDestroy(() => {
         ro.disconnect();
     });
-    /**
-     * Bind scroll element
-     * @param {HTMLElement} element
-     */
-    function bindScrollElement(element) {
-        if (!verticalScrollBarElement) {
-            verticalScrollBarElement = element;
-            state.update('_internal.elements.vertical-scroll', element);
-        }
-    }
     onDestroy(state.subscribeAll(['_internal.loaded', '_internal.chart.time.totalViewDurationPx'], () => {
         if (state.get('_internal.loadedEventTriggered'))
             return;
@@ -4865,41 +6437,281 @@ function Main(vido, props = {}) {
     }
     if (!componentActions.includes(LoadedEventAction))
         componentActions.push(LoadedEventAction);
-    /**
-     * Bind scroll inner element
-     * @param {Element} element
-     */
-    function bindScrollInnerElement(element) {
-        if (!state.get('_internal.elements.vertical-scroll-inner'))
-            state.update('_internal.elements.vertical-scroll-inner', element);
-        if (!state.get('_internal.loaded.vertical-scroll-inner'))
-            state.update('_internal.loaded.vertical-scroll-inner', true);
-    }
     const actionProps = Object.assign(Object.assign({}, props), { api, state });
     const mainActions = Actions.create(componentActions, actionProps);
-    const verticalScrollActions = Actions.create([bindScrollElement]);
-    const verticalScrollAreaActions = Actions.create([bindScrollInnerElement]);
     return templateProps => wrapper(html `
         <div
           data-info-url="https://github.com/neuronetio/gantt-schedule-timeline-calendar"
           class=${className}
           style=${styleMap}
-          @scroll=${onScroll}
-          @wheel=${onScroll}
           data-actions=${mainActions}
         >
           ${List.html()}${Chart.html()}
-          <div
-            class=${classNameVerticalScroll}
-            style=${verticalScrollStyleMap}
-            @scroll=${onScroll}
-            @wheel=${onScroll}
-            data-actions=${verticalScrollActions}
-          >
-            <div style=${verticalScrollAreaStyleMap} data-actions=${verticalScrollAreaActions} />
-          </div>
         </div>
       `, { props, vido, templateProps });
+}
+
+class Action$1 {
+    constructor() {
+        this.isAction = true;
+    }
+}
+Action$1.prototype.isAction = true;
+
+/**
+ * ScrollBar component
+ *
+ * @copyright Rafal Pospiech <https://neuronet.io>
+ * @author    Rafal Pospiech <neuronet.io@gmail.com>
+ * @package   gantt-schedule-timeline-calendar
+ * @license   AGPL-3.0 (https://github.com/neuronetio/gantt-schedule-timeline-calendar/blob/master/LICENSE)
+ * @link      https://github.com/neuronetio/gantt-schedule-timeline-calendar
+ */
+function ScrollBar(vido, props) {
+    const { onDestroy, state, api, html, StyleMap, Actions, update, schedule } = vido;
+    const componentName = 'scroll-bar';
+    let className, classNameInner;
+    let classNameOuterActive = '', classNameInnerActive = '';
+    onDestroy(state.subscribe('config.classNames', () => {
+        className = api.getClass(componentName);
+        classNameInner = api.getClass(componentName + '-inner');
+    }));
+    let size;
+    const sizeProp = props.type === 'horizontal' ? 'height' : 'width';
+    const invSizeProp = sizeProp === 'height' ? 'width' : 'height';
+    const movement = props.type === 'horizontal' ? 'movementX' : 'movementY';
+    const offsetProp = props.type === 'horizontal' ? 'left' : 'top';
+    const styleMapOuter = new StyleMap({});
+    const styleMapInner = new StyleMap({});
+    let pos = 0;
+    let maxPos = 0;
+    let itemsCount = 0;
+    let allDates = [];
+    let rows = [];
+    let rowsOffsets = [];
+    let rowsPercents = [];
+    function generateRowsOffsets() {
+        const len = rows.length;
+        rowsOffsets = [];
+        rowsPercents = [];
+        if (!len)
+            return;
+        let top = 0;
+        for (let i = 0; i < len; i++) {
+            const row = rows[i];
+            rowsOffsets.push(top);
+            top += row.height;
+        }
+        const verticalHeight = state.get('config.scroll.vertical.area');
+        for (const offsetTop of rowsOffsets) {
+            rowsPercents.push(offsetTop / verticalHeight);
+        }
+    }
+    function setScrollLeft(currentItem, pos) {
+        if (currentItem === undefined) {
+            currentItem = 0;
+        }
+        const date = allDates[currentItem];
+        const horizontal = state.get('config.scroll.horizontal');
+        if (horizontal.item && horizontal.item.leftGlobal === date.leftGlobal)
+            return;
+        state.update('config.scroll.horizontal', (scrollHorizontal) => {
+            scrollHorizontal.item = date;
+            scrollHorizontal.posPx = pos;
+            return scrollHorizontal;
+        });
+    }
+    function setScrollTop(currentItem, pos) {
+        if (currentItem === undefined) {
+            currentItem = 0;
+        }
+        const vertical = state.get('config.scroll.vertical');
+        if (vertical.item && vertical.item.id === rows[currentItem].id)
+            return;
+        state.update('config.scroll.vertical', (scrollVertical) => {
+            scrollVertical.item = rows[currentItem];
+            scrollVertical.posPx = pos;
+            return scrollVertical;
+        });
+    }
+    let working = false;
+    onDestroy(state.subscribeAll(props.type === 'horizontal'
+        ? [`config.scroll.${props.type}.size`, '_internal.chart.dimensions.width', '_internal.chart.time']
+        : [
+            `config.scroll.${props.type}.size`,
+            '_internal.innerHeight',
+            '_internal.list.rowsWithParentsExpanded',
+            `config.scroll.${props.type}.area`
+        ], () => {
+        if (working)
+            return;
+        working = true;
+        const time = state.get('_internal.chart.time');
+        const scroll = state.get(`config.scroll.${props.type}`);
+        const chartWidth = state.get('_internal.chart.dimensions.width');
+        const chartHeight = state.get('_internal.innerHeight');
+        size = scroll.size;
+        let invSize = props.type === 'horizontal' ? chartWidth : chartHeight;
+        invSize = invSize || 0;
+        if (props.type === 'horizontal') {
+            invSize -= size;
+        }
+        else {
+            invSize += size;
+        }
+        if (invSize < 0)
+            invSize = 0;
+        styleMapOuter.style[sizeProp] = size + 'px';
+        styleMapOuter.style[invSizeProp] = invSize + 'px';
+        if (props.type === 'vertical') {
+            styleMapOuter.style.top = state.get('config.headerHeight') + 'px';
+        }
+        styleMapInner.style[sizeProp] = '100%';
+        let innerSize = 0;
+        if (props.type === 'horizontal') {
+            if (time.allDates && time.allDates[time.level]) {
+                allDates = time.allDates[time.level];
+                itemsCount = allDates.length;
+            }
+            else {
+                allDates = [];
+            }
+        }
+        else {
+            const rowsWithParentsExpanded = state.get('_internal.list.rowsWithParentsExpanded');
+            if (rowsWithParentsExpanded) {
+                rows = rowsWithParentsExpanded;
+            }
+            else {
+                rows = [];
+            }
+            if (rows.length) {
+                itemsCount = rows.length;
+                generateRowsOffsets();
+            }
+            else {
+                rowsOffsets = [];
+            }
+        }
+        innerSize = invSize / itemsCount;
+        if (innerSize < scroll.minInnerSize) {
+            innerSize = scroll.minInnerSize;
+        }
+        styleMapInner.style[invSizeProp] = innerSize + 'px';
+        maxPos = invSize - innerSize;
+        state.update(`config.scroll.${props.type}.maxPosPx`, maxPos);
+        update();
+        working = false;
+    }));
+    onDestroy(state.subscribe(`config.scroll.${props.type}.posPx`, position => {
+        styleMapInner.style[offsetProp] = position + 'px';
+        pos = position;
+        update();
+    }));
+    class OuterAction extends Action$1 {
+        constructor(element) {
+            super();
+            state.update(`_internal.elements.scroll-bar--${props.type}`, element);
+        }
+        update() { }
+        destroy() { }
+    }
+    class InnerAction extends Action$1 {
+        constructor(element) {
+            super();
+            this.moving = false;
+            this.initialPos = 0;
+            this.currentPos = 0;
+            state.update(`_internal.elements.scroll-bar-inner--${props.type}`, element);
+            this.pointerDown = this.pointerDown.bind(this);
+            this.pointerUp = this.pointerUp.bind(this);
+            const pointerMove = this.pointerMove.bind(this);
+            this.pointerMove = schedule(ev => pointerMove(ev));
+            element.addEventListener('pointerdown', this.pointerDown);
+            window.addEventListener('pointermove', this.pointerMove);
+            window.addEventListener('pointerup', this.pointerUp);
+        }
+        destroy(element) {
+            element.removeEventListener('pointerdown', this.pointerDown);
+            window.removeEventListener('pointermove', this.pointerMove);
+            window.removeEventListener('pointerup', this.pointerUp);
+        }
+        limitPosition(offset) {
+            if (offset < 0)
+                return 0;
+            if (offset > maxPos)
+                return maxPos;
+            return offset;
+        }
+        pointerDown(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            this.moving = true;
+            this.initialPos = props.type === 'horizontal' ? ev.screenX : ev.screenY;
+            classNameInnerActive = ' ' + api.getClass(componentName) + '-inner--active';
+            classNameOuterActive = ' ' + api.getClass(componentName) + '--active';
+            update();
+        }
+        pointerUp(ev) {
+            if (this.moving) {
+                ev.preventDefault();
+                ev.stopPropagation();
+            }
+            this.moving = false;
+            classNameInnerActive = '';
+            classNameOuterActive = '';
+            update();
+        }
+        pointerMove(ev) {
+            if (this.moving) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                this.currentPos = props.type === 'horizontal' ? ev.screenX : ev.screenY;
+                pos = this.limitPosition(pos + ev[movement]);
+                const percent = pos / maxPos;
+                let currentItem;
+                if (props.type === 'horizontal') {
+                    const date = allDates.find(date => date.leftPercent >= percent);
+                    currentItem = allDates.indexOf(date);
+                }
+                else {
+                    for (let i = 0, len = rowsPercents.length; i < len; i++) {
+                        const rowPercent = rowsPercents[i];
+                        if (rowPercent >= percent) {
+                            currentItem = i;
+                            break;
+                        }
+                    }
+                }
+                if (!currentItem)
+                    currentItem = 0;
+                if (props.type === 'horizontal') {
+                    setScrollLeft(currentItem, pos);
+                }
+                else {
+                    setScrollTop(currentItem, pos);
+                }
+            }
+        }
+    }
+    const outerComponentActions = api.getActions(componentName);
+    outerComponentActions.push(OuterAction);
+    const outerActions = Actions.create(outerComponentActions, { api, state, props });
+    const innerComponentActions = [InnerAction];
+    const innerActions = Actions.create(innerComponentActions, { api, state, props });
+    return () => html `
+      <div
+        data-actions=${outerActions}
+        class=${className + ' ' + className + '--' + props.type + classNameOuterActive}
+        style=${styleMapOuter}
+      >
+        <div
+          data-actions=${innerActions}
+          class=${classNameInner + ' ' + classNameInner + '--' + props.type + classNameInnerActive}
+          style=${styleMapInner}
+        ></div>
+      </div>
+    `;
 }
 
 /**
@@ -4977,20 +6789,8 @@ function List(vido, props = {}) {
         listColumns.forEach(listColumn => listColumn.destroy());
         listColumnUnsub();
     });
-    function onScroll(event) {
-        event.stopPropagation();
-        event.preventDefault();
-        if (event.type === 'scroll') {
-            state.update('config.scroll.top', event.target.scrollTop);
-        }
-        else {
-            const wheel = api.normalizeMouseWheelEvent(event);
-            state.update('config.scroll.top', top => {
-                const rowsHeight = state.get('_internal.list.rowsHeight');
-                const internalHeight = state.get('_internal.height');
-                return api.limitScrollTop(rowsHeight, internalHeight, (top += wheel.y * state.get('config.scroll.yMultiplier')));
-            });
-        }
+    function onWheel(ev) {
+        // TODO
     }
     let width;
     function getWidth(element) {
@@ -5015,7 +6815,7 @@ function List(vido, props = {}) {
     const actions = Actions.create(componentActions, Object.assign(Object.assign({}, props), { api, state }));
     return templateProps => wrapper(cache(list.columns.percent > 0
         ? html `
-              <div class=${className} data-actions=${actions} style=${styleMap} @scroll=${onScroll} @wheel=${onScroll}>
+              <div class=${className} data-actions=${actions} style=${styleMap} @wheel=${onWheel}>
                 ${listColumns.map(c => c.html())}
               </div>
             `
@@ -5072,7 +6872,6 @@ function ListColumn(vido, props) {
     let className, classNameContainer, calculatedWidth;
     const widthStyleMap = new StyleMap({ width: '', '--width': '' });
     const containerStyleMap = new StyleMap({ width: '', height: '' });
-    const scrollCompensationStyleMap = new StyleMap({ width: '', height: '' });
     let column, columnPath = `config.list.columns.data.${props.columnId}`;
     let columnSub = state.subscribe(columnPath, function columnChanged(val) {
         column = val;
@@ -5081,23 +6880,19 @@ function ListColumn(vido, props) {
     let width;
     function calculateStyle() {
         const list = state.get('config.list');
-        const compensationY = state.get('config.scroll.compensation.y');
         calculatedWidth = list.columns.data[column.id].width * list.columns.percent * 0.01;
         width = calculatedWidth;
-        const height = state.get('_internal.height');
+        const height = state.get('_internal.innerHeight');
         widthStyleMap.style.width = width + 'px';
         widthStyleMap.style['--width'] = width + 'px';
         containerStyleMap.style.height = height + 'px';
-        scrollCompensationStyleMap.style.height = height + Math.abs(compensationY) + 'px';
-        scrollCompensationStyleMap.style.transform = `translate(0px, ${compensationY}px)`;
     }
     let styleSub = state.subscribeAll([
         'config.list.columns.percent',
         'config.list.columns.resizer.width',
         `config.list.columns.data.${column.id}.width`,
         '_internal.chart.dimensions.width',
-        '_internal.height',
-        'config.scroll.compensation.y',
+        '_internal.innerHeight',
         '_internal.list.width'
     ], calculateStyle, { bulk: true });
     const ListColumnHeader = createComponent(ListColumnHeaderComponent, { columnId: props.columnId });
@@ -5122,8 +6917,7 @@ function ListColumn(vido, props) {
             'config.list.columns.resizer.width',
             `config.list.columns.data.${column.id}.width`,
             '_internal.chart.dimensions.width',
-            '_internal.height',
-            'config.scroll.compensation.y',
+            '_internal.innerHeight',
             '_internal.list.width'
         ], calculateStyle, { bulk: true });
         ListColumnHeader.change(props);
@@ -5158,9 +6952,7 @@ function ListColumn(vido, props) {
         <div class=${className} data-actions=${headerActions} style=${widthStyleMap}>
           ${ListColumnHeader.html()}
           <div class=${classNameContainer} style=${containerStyleMap} data-actions=${rowActions}>
-            <div class=${classNameContainer + '--scroll-compensation'} style=${scrollCompensationStyleMap}>
-              ${visibleRows.map(getRowHtml)}
-            </div>
+            ${visibleRows.map(getRowHtml)}
           </div>
         </div>
       `, { vido, props, templateProps });
@@ -5519,21 +7311,12 @@ function ListColumnRow(vido, props) {
             event.preventDefault();
             if (movementX) {
                 state.update('config.list.columns.percent', percent => {
-                    percent += movementX * state.get('config.scroll.xMultiplier');
+                    percent += movementX;
                     if (percent < 0)
                         percent = 0;
                     if (percent > 100)
                         percent = 100;
                     return percent;
-                });
-            }
-            else if (movementY) {
-                state.update('config.scroll.top', top => {
-                    top -= movementY * state.get('config.scroll.yMultiplier');
-                    const rowsHeight = state.get('_internal.list.rowsHeight');
-                    const internalHeight = state.get('_internal.height');
-                    top = api.limitScrollTop(rowsHeight, internalHeight, top);
-                    return top;
                 });
             }
         }
@@ -5755,99 +7538,46 @@ function ListToggle(vido, props = {}) {
  * @link      https://github.com/neuronetio/gantt-schedule-timeline-calendar
  */
 function Chart(vido, props = {}) {
-    const { api, state, onDestroy, Actions, update, html, StyleMap, createComponent } = vido;
+    const { api, state, onDestroy, Actions, update, html, createComponent } = vido;
     const componentName = 'chart';
-    const ChartCalendarComponent = state.get('config.components.ChartCalendar');
-    const ChartTimelineComponent = state.get('config.components.ChartTimeline');
+    const componentSubs = [];
+    let ChartCalendarComponent;
+    componentSubs.push(state.subscribe('config.components.ChartCalendar', value => (ChartCalendarComponent = value)));
+    let ChartTimelineComponent;
+    componentSubs.push(state.subscribe('config.components.ChartTimeline', value => (ChartTimelineComponent = value)));
+    let ScrollBarComponent;
+    componentSubs.push(state.subscribe('config.components.ScrollBar', value => (ScrollBarComponent = value)));
+    const ChartCalendar = createComponent(ChartCalendarComponent);
+    onDestroy(ChartCalendar.destroy);
+    const ChartTimeline = createComponent(ChartTimelineComponent);
+    onDestroy(ChartTimeline.destroy);
+    const ScrollBarHorizontal = createComponent(ScrollBarComponent, { type: 'horizontal' });
+    onDestroy(ScrollBarHorizontal.destroy);
+    const ScrollBarVertical = createComponent(ScrollBarComponent, { type: 'vertical' });
+    onDestroy(ScrollBarVertical.destroy);
+    onDestroy(() => {
+        componentSubs.forEach(unsub => unsub());
+    });
     let wrapper;
     onDestroy(state.subscribe('config.wrappers.Chart', value => (wrapper = value)));
-    const Calendar = createComponent(ChartCalendarComponent);
-    onDestroy(Calendar.destroy);
-    const Timeline = createComponent(ChartTimelineComponent);
-    onDestroy(Timeline.destroy);
-    let className, classNameScroll, classNameScrollInner, scrollElement, scrollInnerElement;
+    let className, classNameScroll, classNameScrollInner;
     const componentActions = api.getActions(componentName);
-    onDestroy(state.subscribe('config.classNames', value => {
+    let calculatedZoomMode = false;
+    onDestroy(state.subscribe('config.chart.time.calculatedZoomMode', zoomMode => (calculatedZoomMode = zoomMode)));
+    onDestroy(state.subscribe('config.classNames', () => {
         className = api.getClass(componentName);
         classNameScroll = api.getClass('horizontal-scroll');
         classNameScrollInner = api.getClass('horizontal-scroll-inner');
         update();
     }));
-    onDestroy(state.subscribeAll(['_internal.chart.dimensions.width', '_internal.chart.time.totalViewDurationPx'], function horizontalScroll() {
-        if (scrollElement)
-            scrollElement.style.width = state.get('_internal.chart.dimensions.width') + 'px';
-        if (scrollInnerElement)
-            scrollInnerElement.style.width = state.get('_internal.chart.time.totalViewDurationPx') + 'px';
-    }));
-    onDestroy(state.subscribe('config.scroll.left', left => {
-        if (scrollElement) {
-            scrollElement.scrollLeft = left;
-        }
-    }));
-    function onScrollHandler(event) {
-        if (event.type === 'scroll') {
-            // @ts-ignore
-            const left = event.target.scrollLeft;
-            state.update('config.scroll.left', left);
-        }
-    }
-    const onScroll = {
-        handleEvent: onScrollHandler,
-        passive: true,
-        capture: false
-    };
     function onWheelHandler(event) {
-        if (event.type === 'wheel') {
-            const wheel = api.normalizeMouseWheelEvent(event);
-            const xMultiplier = state.get('config.scroll.xMultiplier');
-            const yMultiplier = state.get('config.scroll.yMultiplier');
-            const currentScrollLeft = state.get('config.scroll.left');
-            const totalViewDurationPx = state.get('_internal.chart.time.totalViewDurationPx');
-            if (event.shiftKey && wheel.y) {
-                const newScrollLeft = api.limitScrollLeft(totalViewDurationPx, chartWidth, currentScrollLeft + wheel.y * xMultiplier);
-                state.update('config.scroll.left', newScrollLeft); // will trigger scrollbar to move which will trigger scroll event
-            }
-            else if (event.ctrlKey && wheel.y) {
-                event.preventDefault();
-                state.update('config.chart.time.zoom', currentZoom => {
-                    if (wheel.y < 0) {
-                        return currentZoom - 1;
-                    }
-                    return currentZoom + 1;
-                });
-            }
-            else if (wheel.x) {
-                const currentScrollLeft = state.get('config.scroll.left');
-                state.update('config.scroll.left', api.limitScrollLeft(totalViewDurationPx, chartWidth, currentScrollLeft + wheel.x * xMultiplier));
-            }
-            else {
-                state.update('config.scroll.top', top => {
-                    const rowsHeight = state.get('_internal.list.rowsHeight');
-                    const internalHeight = state.get('_internal.height');
-                    return api.limitScrollTop(rowsHeight, internalHeight, (top += wheel.y * yMultiplier));
-                });
-            }
-        }
+        if (event.type === 'wheel') ;
     }
     const onWheel = {
         handleEvent: onWheelHandler,
         passive: false,
         capture: false
     };
-    function bindElement(element) {
-        if (!scrollElement) {
-            scrollElement = element;
-            state.update('_internal.elements.horizontal-scroll', element);
-        }
-    }
-    function bindInnerScroll(element) {
-        scrollInnerElement = element;
-        const old = state.get('_internal.elements.horizontal-scroll-inner');
-        if (old !== element)
-            state.update('_internal.elements.horizontal-scroll-inner', element);
-        if (!state.get('_internal.loaded.horizontal-scroll-inner'))
-            state.update('_internal.loaded.horizontal-scroll-inner', true);
-    }
     let chartWidth = 0;
     let ro;
     componentActions.push(function bindElement(element) {
@@ -5855,7 +7585,7 @@ function Chart(vido, props = {}) {
             ro = new index((entries, observer) => {
                 const width = element.clientWidth;
                 const height = element.clientHeight;
-                const innerWidth = width - state.get('_internal.scrollBarHeight');
+                const innerWidth = width - state.get('config.scroll.horizontal.size');
                 if (chartWidth !== width) {
                     chartWidth = width;
                     state.update('_internal.chart.dimensions', { width, innerWidth, height });
@@ -5870,14 +7600,11 @@ function Chart(vido, props = {}) {
         ro.disconnect();
     });
     const actions = Actions.create(componentActions, { api, state });
-    const scrollActions = Actions.create([bindElement]);
-    const scrollAreaActions = Actions.create([bindInnerScroll]);
     return templateProps => wrapper(html `
-        <div class=${className} data-actions=${actions} @wheel=${onWheel} @scroll=${onScroll}>
-          ${Calendar.html()}${Timeline.html()}
-          <div class=${classNameScroll} data-actions=${scrollActions} @scroll=${onScroll}>
-            <div class=${classNameScrollInner} style="height: 1px" data-actions=${scrollAreaActions} />
-          </div>
+        <div class=${className} data-actions=${actions} @wheel=${onWheel}>
+          ${ChartCalendar.html()}${ChartTimeline.html()}${ScrollBarVertical.html()}${calculatedZoomMode
+        ? null
+        : ScrollBarHorizontal.html()}
         </div>
       `, { vido, props: {}, templateProps });
 }
@@ -5910,10 +7637,6 @@ function ChartCalendar(vido, props) {
         headerHeight = value;
         styleMap.style['height'] = headerHeight + 'px';
         styleMap.style['--calendar-height'] = headerHeight + 'px';
-        update();
-    }));
-    onDestroy(state.subscribe('config.scroll.compensation.x', compensation => {
-        styleMap.style['margin-left'] = -compensation + 'px';
         update();
     }));
     const components = [[], []];
@@ -5961,13 +7684,6 @@ function ChartCalendar(vido, props) {
       `, { props, vido, templateProps });
 }
 
-class Action$1 {
-    constructor() {
-        this.isAction = true;
-    }
-}
-Action$1.prototype.isAction = true;
-
 /**
  * ChartCalendarDay component
  *
@@ -6004,58 +7720,32 @@ function ChartCalendarDay(vido, props) {
     onDestroy(state.subscribe('config.wrappers.ChartCalendarDate', value => (wrapper = value)));
     let className;
     onDestroy(state.subscribe('config.classNames', () => {
-        className = api.getClass(componentName, props);
+        className = api.getClass(componentName);
     }));
-    let current = '';
+    let additionalClass = '';
     let time, htmlFormatted;
-    const styleMap = new StyleMap({ width: '', visibility: 'visible' }), scrollStyleMap = new StyleMap({
-        overflow: 'hidden',
-        'text-align': 'left'
-    });
+    const styleMap = new StyleMap({ width: '0px' });
     let formatClassName = '';
     function updateDate() {
         if (!props)
             return;
-        const cache = state.get('_internal.cache.calendar');
         const level = state.get(`config.chart.calendar.levels.${props.level}`);
-        styleMap.style.width = props.date.width + 'px';
-        styleMap.style.visibility = 'visible';
-        scrollStyleMap.style = { overflow: 'hidden', 'text-align': 'left', 'margin-left': props.date.subPx + 8 + 'px' };
+        styleMap.style.width = props.date.currentView.width + 'px';
         time = state.get('_internal.chart.time');
-        const cacheKey = `${new Date(props.date.leftGlobal).toISOString()}-${props.date.period}-${props.level}-${time.zoom}`;
-        if (!cache[cacheKey]) {
-            cache[cacheKey] = {};
+        const formatting = level.formats.find(formatting => +time.zoom <= +formatting.zoomTo);
+        if (props.date.current) {
+            additionalClass = ' gstc-current';
         }
-        let timeStart, timeEnd;
-        {
-            timeStart = api.time.date(props.date.leftGlobal);
-            timeEnd = api.time.date(props.date.rightGlobal);
-            cache[cacheKey].timeStart = timeStart;
-            cache[cacheKey].timeEnd = timeEnd;
+        else if (props.date.next) {
+            additionalClass = ' gstc-next';
         }
-        const formats = level.formats;
-        const formatting = formats.find(formatting => +time.zoom <= +formatting.zoomTo);
-        let format;
-        {
-            format = formatting ? formatting.format({ timeStart, timeEnd, className, vido, props }) : null;
-            cache[cacheKey].format = format;
+        else if (props.date.previous) {
+            additionalClass = ' gstc-previous';
         }
-        {
-            if (timeStart.format(props.currentDateFormat) === props.currentDate) {
-                current = ' gstc-current';
-            }
-            else if (timeStart.subtract(1, props.date.period).format(props.currentDateFormat) === props.currentDate) {
-                current = ' gstc-next';
-            }
-            else if (timeStart.add(1, props.date.period).format(props.currentDateFormat) === props.currentDate) {
-                current = ' gstc-previous';
-            }
-            else {
-                current = '';
-            }
-            cache[cacheKey].current = current;
+        else {
+            additionalClass = '';
         }
-        let finalClassName = className + '-content ' + className + `-content--${props.date.period}` + current;
+        let finalClassName = className + '-content ' + className + `-content--${props.date.period}` + additionalClass;
         if (formatting.className) {
             finalClassName += ' ' + formatting.className;
             formatClassName = ' ' + formatting.className;
@@ -6063,10 +7753,9 @@ function ChartCalendarDay(vido, props) {
         else {
             formatClassName = '';
         }
-        // updating cache state is not necessary because it is object and nobody listen to cache
         htmlFormatted = html `
       <div class=${finalClassName}>
-        ${format}
+        ${props.date.formatted}
       </div>
     `;
         update();
@@ -6107,7 +7796,7 @@ function ChartCalendarDay(vido, props) {
         ' ' +
         className +
         `--level-${props.level}` +
-        current +
+        additionalClass +
         formatClassName}
           style=${styleMap}
           data-actions=${actions}
@@ -6152,16 +7841,10 @@ function ChartTimeline(vido, props) {
     onDestroy(state.subscribe('config.list.toggle.display', val => (showToggle = val)));
     const styleMap = new StyleMap({}), innerStyleMap = new StyleMap({});
     function calculateStyle() {
-        const xCompensation = api.getCompensationX();
-        const yCompensation = api.getCompensationY();
         const width = state.get('_internal.chart.dimensions.width');
         const height = state.get('_internal.list.rowsHeight');
-        styleMap.style.height = state.get('_internal.height') + 'px';
+        styleMap.style.height = state.get('_internal.innerHeight') + 'px';
         styleMap.style['--height'] = styleMap.style.height;
-        styleMap.style['--negative-compensation-x'] = xCompensation + 'px';
-        styleMap.style['--compensation-x'] = Math.round(Math.abs(xCompensation)) + 'px';
-        styleMap.style['--negative-compensation-y'] = yCompensation + 'px';
-        styleMap.style['--compensation-y'] = Math.abs(yCompensation) + 'px';
         if (width) {
             styleMap.style.width = width + 'px';
             styleMap.style['--width'] = width + 'px';
@@ -6172,20 +7855,17 @@ function ChartTimeline(vido, props) {
         }
         innerStyleMap.style.height = height + 'px';
         if (width) {
-            innerStyleMap.style.width = width + xCompensation + 'px';
+            innerStyleMap.style.width = width + 'px';
         }
         else {
             innerStyleMap.style.width = '0px';
         }
-        //innerStyleMap.style.transform = `translate(-${xCompensation}px, ${yCompensation}px)`;
-        innerStyleMap.style['margin-left'] = -xCompensation + 'px';
         update();
     }
     onDestroy(state.subscribeAll([
-        '_internal.height',
+        '_internal.innerHeight',
         '_internal.chart.dimensions.width',
         '_internal.list.rowsHeight',
-        'config.scroll.compensation',
         '_internal.chart.time.dates.day'
     ], calculateStyle));
     componentActions.push(class BindElementAction extends Action {
@@ -6255,7 +7935,7 @@ function ChartTimelineGrid(vido, props) {
      */
     function generateBlocks() {
         const width = state.get('_internal.chart.dimensions.width');
-        const height = state.get('_internal.height');
+        const height = state.get('_internal.innerHeight');
         const time = state.get('_internal.chart.time');
         const periodDates = state.get(`_internal.chart.time.levels.${time.level}`);
         if (!periodDates || periodDates.length === 0) {
@@ -6263,10 +7943,8 @@ function ChartTimelineGrid(vido, props) {
             return;
         }
         const visibleRows = state.get('_internal.list.visibleRows');
-        const xCompensation = api.getCompensationX();
-        const yCompensation = api.getCompensationY();
-        styleMap.style.height = height + Math.abs(yCompensation) + 'px';
-        styleMap.style.width = width + xCompensation + 'px';
+        styleMap.style.height = height + 'px';
+        styleMap.style.width = width + 'px';
         let top = 0;
         rowsWithBlocks.length = 0;
         for (const row of visibleRows) {
@@ -6295,7 +7973,7 @@ function ChartTimelineGrid(vido, props) {
     onDestroy(state.subscribeAll([
         '_internal.list.visibleRows;',
         `_internal.chart.time.levels`,
-        '_internal.height',
+        '_internal.innerHeight',
         '_internal.chart.dimensions.width'
     ], generateBlocks, {
         bulk: true
@@ -6478,12 +8156,8 @@ const ChartTimelineGridRowBlock = (vido, props) => {
     }));
     let className;
     function updateClassName(time) {
-        const currentTime = api.time
-            .date()
-            .startOf(time.period)
-            .valueOf();
         className = api.getClass(componentName);
-        if (time.leftGlobal === currentTime) {
+        if (time.current) {
             className += ' current';
         }
     }
@@ -6555,18 +8229,11 @@ function ChartTimelineItems(vido, props = {}) {
     const styleMap = new StyleMap({}, true);
     function calculateStyle() {
         const width = state.get('_internal.chart.dimensions.width');
-        const height = state.get('_internal.height');
-        const yCompensation = api.getCompensationY();
-        const xCompensation = api.getCompensationX();
-        styleMap.style.width = width + xCompensation + 'px';
-        styleMap.style.height = height + Math.abs(yCompensation) + 'px';
+        const height = state.get('_internal.innerHeight');
+        styleMap.style.width = width + 'px';
+        styleMap.style.height = height + 'px';
     }
-    onDestroy(state.subscribeAll([
-        '_internal.height',
-        '_internal.chart.dimensions.width',
-        'config.scroll.compensation',
-        '_internal.chart.time.dates.day'
-    ], calculateStyle));
+    onDestroy(state.subscribeAll(['_internal.innerHeight', '_internal.chart.dimensions.width'], calculateStyle));
     const rowsComponents = [];
     function createRowComponents() {
         const visibleRows = state.get('_internal.list.visibleRows');
@@ -6635,8 +8302,7 @@ const ChartTimelineItemsRow = (vido, props) => {
     const updateDom = () => {
         const chart = state.get('_internal.chart');
         shouldDetach = false;
-        const xCompensation = api.getCompensationX();
-        styleMap.style.width = chart.dimensions.width + xCompensation + 'px';
+        styleMap.style.width = chart.dimensions.width + 'px';
         if (!props) {
             shouldDetach = true;
             return;
@@ -6678,6 +8344,7 @@ const ChartTimelineItemsRow = (vido, props) => {
     onChange((changedProps, options) => {
         if (options.leave || changedProps.row === undefined) {
             shouldDetach = true;
+            reuseComponents(itemComponents, [], item => ({ row: undefined, item }), ItemComponent);
             return update();
         }
         props = changedProps;
@@ -6743,11 +8410,11 @@ class BindElementAction$7 {
     }
 }
 function ChartTimelineItemsRowItem(vido, props) {
-    const { api, state, onDestroy, Detach, Actions, update, html, onChange, unsafeHTML, StyleMap } = vido;
+    const { api, state, onDestroy, Detach, Actions, update, html, svg, onChange, unsafeHTML, StyleMap } = vido;
     let wrapper;
     onDestroy(state.subscribe('config.wrappers.ChartTimelineItemsRowItem', value => (wrapper = value)));
-    let itemLeftPx = 0, itemWidthPx = 0, leave = false, cutLeft = false, cutRight = false;
-    const styleMap = new StyleMap({ width: '', height: '', left: '' }), leftCutStyleMap = new StyleMap({ 'margin-left': '0px' }), rightCutStyleMap = new StyleMap({ 'margin-right': '0px' }), actionProps = {
+    let itemLeftPx = 0, itemWidthPx = 0, leave = false;
+    const styleMap = new StyleMap({ width: '', height: '', left: '' }), leftCutStyleMap = new StyleMap({}), rightCutStyleMap = new StyleMap({}), actionProps = {
         item: props.item,
         row: props.row,
         left: itemLeftPx,
@@ -6756,44 +8423,42 @@ function ChartTimelineItemsRowItem(vido, props) {
         state
     };
     let shouldDetach = false;
-    function updateItem() {
+    function updateItem(time = state.get('_internal.chart.time')) {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
-        if (leave)
+        if (leave || time.levels.length === 0 || !time.levels[time.level] || time.levels[time.level].length === 0) {
+            shouldDetach = true;
             return;
-        const time = state.get('_internal.chart.time');
-        itemLeftPx = api.time.globalTimeToViewPixelOffset(props.item.time.start);
-        itemLeftPx = Math.round(itemLeftPx * 10) * 0.1;
-        itemWidthPx = (props.item.time.end - props.item.time.start) / time.timePerPixel;
-        itemWidthPx -= state.get('config.chart.spacing') || 0;
-        if (itemWidthPx) {
-            itemWidthPx = Math.round(itemWidthPx * 10) * 0.1;
         }
+        itemLeftPx = api.time.getOffsetPxFromDates(api.time.date(props.item.time.start), time.levels[time.level], time.period, time);
+        const itemRightPx = api.time.getOffsetPxFromDates(api.time.date(props.item.time.end), time.levels[time.level], time.period, time);
+        itemWidthPx = itemRightPx - itemLeftPx;
+        itemWidthPx -= state.get('config.chart.spacing') || 0;
         if (props.item.time.start < time.leftGlobal) {
-            leftCutStyleMap.style['margin-left'] = (time.leftGlobal - props.item.time.start) / time.timePerPixel + 'px';
-            cutLeft = true;
+            const diff = (time.leftGlobal - props.item.time.start) / time.timePerPixel;
+            //leftCutStyleMap.style['margin-left'] = diff + 'px';
+            leftCutStyleMap.style.display = 'block';
         }
         else {
-            leftCutStyleMap.style['margin-left'] = '0px';
-            cutLeft = false;
+            //leftCutStyleMap.style['margin-left'] = '0px';
+            leftCutStyleMap.style.display = 'none';
         }
         if (props.item.time.end > time.rightGlobal) {
-            rightCutStyleMap.style['margin-right'] = (props.item.time.end - time.rightGlobal) / time.timePerPixel + 'px';
-            cutRight = true;
+            const diff = (props.item.time.end - time.rightGlobal) / time.timePerPixel;
+            //rightCutStyleMap.style['margin-right'] = diff + 'px';
+            rightCutStyleMap.style.display = 'block';
         }
         else {
-            cutRight = false;
-            rightCutStyleMap.style['margin-right'] = '0px';
+            rightCutStyleMap.style.display = 'none';
         }
         const oldWidth = styleMap.style.width;
         const oldLeft = styleMap.style.left;
-        const xCompensation = api.getCompensationX();
         styleMap.setStyle({});
         const inViewPort = api.isItemInViewport(props.item, time.leftGlobal, time.rightGlobal);
         shouldDetach = !inViewPort;
         if (inViewPort) {
             // update style only when visible to prevent browser's recalculate style
             styleMap.style.width = itemWidthPx + 'px';
-            styleMap.style.left = itemLeftPx + xCompensation + 'px';
+            styleMap.style.left = itemLeftPx + 'px';
         }
         else {
             styleMap.style.width = oldWidth;
@@ -6812,24 +8477,24 @@ function ChartTimelineItemsRowItem(vido, props) {
         const currentStyle = (_l = (_k = props) === null || _k === void 0 ? void 0 : _k.item) === null || _l === void 0 ? void 0 : _l.style;
         if (currentStyle)
             styleMap.setStyle(Object.assign(Object.assign({}, styleMap.style), currentStyle));
-        actionProps.left = itemLeftPx + xCompensation;
+        actionProps.left = itemLeftPx;
         actionProps.width = itemWidthPx;
         update();
     }
     const componentName = 'chart-timeline-items-row-item';
     const cutterName = api.getClass(componentName) + '-cut';
-    const cutterLeft = html `
+    const cutterLeft = () => html `
     <div class=${cutterName} style=${leftCutStyleMap}>
-      <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 18 16" width="16">
+      ${svg `<svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 18 16" width="16">
         <path fill-opacity="0.5" fill="#ffffff" d="m5,3l-5,5l5,5l0,-10z" />
-      </svg>
+      </svg>`}
     </div>
   `;
-    const cutterRight = html `
+    const cutterRight = () => html `
     <div class=${cutterName} style=${rightCutStyleMap}>
-      <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 4 16" width="16">
+      ${svg `<svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 4 16" width="16">
         <path transform="rotate(-180 2.5,8) " fill-opacity="0.5" fill="#ffffff" d="m5,3l-5,5l5,5l0,-10z" />
-      </svg>
+      </svg>`}
     </div>
   `;
     function onPropsChange(changedProps, options) {
@@ -6855,18 +8520,18 @@ function ChartTimelineItemsRowItem(vido, props) {
         labelClassName = api.getClass(componentName + '-label', props);
         update();
     }));
-    onDestroy(state.subscribeAll(['_internal.chart.time', 'config.scroll.compensation.x'], updateItem));
+    onDestroy(state.subscribe('_internal.chart.time', updateItem));
     componentActions.push(BindElementAction$7);
     const actions = Actions.create(componentActions, actionProps);
     const detach = new Detach(() => shouldDetach);
     return templateProps => {
         return wrapper(html `
         <div detach=${detach} class=${className} data-actions=${actions} style=${styleMap}>
-          ${cutLeft ? cutterLeft : ''}
-          <div class=${labelClassName}>
+          ${cutterLeft()}
+          <div class=${labelClassName} title=${props.item.isHtml ? null : props.item.label}>
             ${props.item.isHtml ? unsafeHTML(props.item.label) : props.item.label}
           </div>
-          ${cutRight ? cutterRight : ''}
+          ${cutterRight()}
         </div>
       `, { vido, props, templateProps });
     };
@@ -6882,6 +8547,7 @@ function ChartTimelineItemsRowItem(vido, props) {
  */
 const actionNames = [
     'main',
+    'scroll-bar',
     'list',
     'list-column',
     'list-column-header',
@@ -6921,10 +8587,11 @@ function defaultConfig() {
     return {
         plugins: [],
         plugin: {},
-        height: 822,
+        innerHeight: 822,
         headerHeight: 72,
         components: {
             Main,
+            ScrollBar,
             List,
             ListColumn,
             ListColumnHeader,
@@ -6946,6 +8613,9 @@ function defaultConfig() {
         },
         wrappers: {
             Main(input) {
+                return input;
+            },
+            ScrollBar(input) {
                 return input;
             },
             List(input) {
@@ -7038,19 +8708,21 @@ function defaultConfig() {
             }
         },
         scroll: {
-            propagate: true,
-            smooth: false,
-            top: 0,
-            left: 0,
-            xMultiplier: 3,
-            yMultiplier: 3,
-            percent: {
-                top: 0,
-                left: 0
+            horizontal: {
+                size: 12,
+                minInnerSize: 40,
+                item: null,
+                posPx: 0,
+                maxPosPx: 0,
+                area: 0
             },
-            compensation: {
-                x: 0,
-                y: 0
+            vertical: {
+                size: 10,
+                minInnerSize: 40,
+                item: null,
+                posPx: 0,
+                maxPosPx: 0,
+                area: 0
             }
         },
         chart: {
@@ -7065,7 +8737,12 @@ function defaultConfig() {
                 centerGlobal: 0,
                 rightGlobal: 0,
                 levels: [],
-                calculatedZoomMode: false
+                calculatedZoomMode: false,
+                onLevelDate: [],
+                onLevelDates: [],
+                onAllLevelDates: [],
+                onCurrentViewLevelDates: [],
+                allDates: []
             },
             calendar: {
                 expand: true,
@@ -7290,14 +8967,8 @@ function defaultConfig() {
     };
 }
 
-var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
-
-function createCommonjsModule(fn, module) {
-	return module = { exports: {} }, fn(module, module.exports), module.exports;
-}
-
 var dayjs_min = createCommonjsModule(function (module, exports) {
-!function(t,n){module.exports=n();}(commonjsGlobal,function(){var t="millisecond",n="second",e="minute",r="hour",i="day",s="week",u="month",o="quarter",a="year",h=/^(\d{4})-?(\d{1,2})-?(\d{0,2})[^0-9]*(\d{1,2})?:?(\d{1,2})?:?(\d{1,2})?.?(\d{1,3})?$/,f=/\[([^\]]+)]|Y{2,4}|M{1,4}|D{1,2}|d{1,4}|H{1,2}|h{1,2}|a|A|m{1,2}|s{1,2}|Z{1,2}|SSS/g,c=function(t,n,e){var r=String(t);return !r||r.length>=n?t:""+Array(n+1-r.length).join(e)+t},d={s:c,z:function(t){var n=-t.utcOffset(),e=Math.abs(n),r=Math.floor(e/60),i=e%60;return (n<=0?"+":"-")+c(r,2,"0")+":"+c(i,2,"0")},m:function(t,n){var e=12*(n.year()-t.year())+(n.month()-t.month()),r=t.clone().add(e,u),i=n-r<0,s=t.clone().add(e+(i?-1:1),u);return Number(-(e+(n-r)/(i?r-s:s-r))||0)},a:function(t){return t<0?Math.ceil(t)||0:Math.floor(t)},p:function(h){return {M:u,y:a,w:s,d:i,h:r,m:e,s:n,ms:t,Q:o}[h]||String(h||"").toLowerCase().replace(/s$/,"")},u:function(t){return void 0===t}},$={name:"en",weekdays:"Sunday_Monday_Tuesday_Wednesday_Thursday_Friday_Saturday".split("_"),months:"January_February_March_April_May_June_July_August_September_October_November_December".split("_")},l="en",m={};m[l]=$;var y=function(t){return t instanceof v},M=function(t,n,e){var r;if(!t)return l;if("string"==typeof t)m[t]&&(r=t),n&&(m[t]=n,r=t);else{var i=t.name;m[i]=t,r=i;}return e||(l=r),r},g=function(t,n,e){if(y(t))return t.clone();var r=n?"string"==typeof n?{format:n,pl:e}:n:{};return r.date=t,new v(r)},D=d;D.l=M,D.i=y,D.w=function(t,n){return g(t,{locale:n.$L,utc:n.$u,$offset:n.$offset})};var v=function(){function c(t){this.$L=this.$L||M(t.locale,null,!0),this.parse(t);}var d=c.prototype;return d.parse=function(t){this.$d=function(t){var n=t.date,e=t.utc;if(null===n)return new Date(NaN);if(D.u(n))return new Date;if(n instanceof Date)return new Date(n);if("string"==typeof n&&!/Z$/i.test(n)){var r=n.match(h);if(r)return e?new Date(Date.UTC(r[1],r[2]-1,r[3]||1,r[4]||0,r[5]||0,r[6]||0,r[7]||0)):new Date(r[1],r[2]-1,r[3]||1,r[4]||0,r[5]||0,r[6]||0,r[7]||0)}return new Date(n)}(t),this.init();},d.init=function(){var t=this.$d;this.$y=t.getFullYear(),this.$M=t.getMonth(),this.$D=t.getDate(),this.$W=t.getDay(),this.$H=t.getHours(),this.$m=t.getMinutes(),this.$s=t.getSeconds(),this.$ms=t.getMilliseconds();},d.$utils=function(){return D},d.isValid=function(){return !("Invalid Date"===this.$d.toString())},d.isSame=function(t,n){var e=g(t);return this.startOf(n)<=e&&e<=this.endOf(n)},d.isAfter=function(t,n){return g(t)<this.startOf(n)},d.isBefore=function(t,n){return this.endOf(n)<g(t)},d.$g=function(t,n,e){return D.u(t)?this[n]:this.set(e,t)},d.year=function(t){return this.$g(t,"$y",a)},d.month=function(t){return this.$g(t,"$M",u)},d.day=function(t){return this.$g(t,"$W",i)},d.date=function(t){return this.$g(t,"$D","date")},d.hour=function(t){return this.$g(t,"$H",r)},d.minute=function(t){return this.$g(t,"$m",e)},d.second=function(t){return this.$g(t,"$s",n)},d.millisecond=function(n){return this.$g(n,"$ms",t)},d.unix=function(){return Math.floor(this.valueOf()/1e3)},d.valueOf=function(){return this.$d.getTime()},d.startOf=function(t,o){var h=this,f=!!D.u(o)||o,c=D.p(t),d=function(t,n){var e=D.w(h.$u?Date.UTC(h.$y,n,t):new Date(h.$y,n,t),h);return f?e:e.endOf(i)},$=function(t,n){return D.w(h.toDate()[t].apply(h.toDate(),(f?[0,0,0,0]:[23,59,59,999]).slice(n)),h)},l=this.$W,m=this.$M,y=this.$D,M="set"+(this.$u?"UTC":"");switch(c){case a:return f?d(1,0):d(31,11);case u:return f?d(1,m):d(0,m+1);case s:var g=this.$locale().weekStart||0,v=(l<g?l+7:l)-g;return d(f?y-v:y+(6-v),m);case i:case"date":return $(M+"Hours",0);case r:return $(M+"Minutes",1);case e:return $(M+"Seconds",2);case n:return $(M+"Milliseconds",3);default:return this.clone()}},d.endOf=function(t){return this.startOf(t,!1)},d.$set=function(s,o){var h,f=D.p(s),c="set"+(this.$u?"UTC":""),d=(h={},h[i]=c+"Date",h.date=c+"Date",h[u]=c+"Month",h[a]=c+"FullYear",h[r]=c+"Hours",h[e]=c+"Minutes",h[n]=c+"Seconds",h[t]=c+"Milliseconds",h)[f],$=f===i?this.$D+(o-this.$W):o;if(f===u||f===a){var l=this.clone().set("date",1);l.$d[d]($),l.init(),this.$d=l.set("date",Math.min(this.$D,l.daysInMonth())).toDate();}else d&&this.$d[d]($);return this.init(),this},d.set=function(t,n){return this.clone().$set(t,n)},d.get=function(t){return this[D.p(t)]()},d.add=function(t,o){var h,f=this;t=Number(t);var c=D.p(o),d=function(n){var e=g(f);return D.w(e.date(e.date()+Math.round(n*t)),f)};if(c===u)return this.set(u,this.$M+t);if(c===a)return this.set(a,this.$y+t);if(c===i)return d(1);if(c===s)return d(7);var $=(h={},h[e]=6e4,h[r]=36e5,h[n]=1e3,h)[c]||1,l=this.$d.getTime()+t*$;return D.w(l,this)},d.subtract=function(t,n){return this.add(-1*t,n)},d.format=function(t){var n=this;if(!this.isValid())return "Invalid Date";var e=t||"YYYY-MM-DDTHH:mm:ssZ",r=D.z(this),i=this.$locale(),s=this.$H,u=this.$m,o=this.$M,a=i.weekdays,h=i.months,c=function(t,r,i,s){return t&&(t[r]||t(n,e))||i[r].substr(0,s)},d=function(t){return D.s(s%12||12,t,"0")},$=i.meridiem||function(t,n,e){var r=t<12?"AM":"PM";return e?r.toLowerCase():r},l={YY:String(this.$y).slice(-2),YYYY:this.$y,M:o+1,MM:D.s(o+1,2,"0"),MMM:c(i.monthsShort,o,h,3),MMMM:h[o]||h(this,e),D:this.$D,DD:D.s(this.$D,2,"0"),d:String(this.$W),dd:c(i.weekdaysMin,this.$W,a,2),ddd:c(i.weekdaysShort,this.$W,a,3),dddd:a[this.$W],H:String(s),HH:D.s(s,2,"0"),h:d(1),hh:d(2),a:$(s,u,!0),A:$(s,u,!1),m:String(u),mm:D.s(u,2,"0"),s:String(this.$s),ss:D.s(this.$s,2,"0"),SSS:D.s(this.$ms,3,"0"),Z:r};return e.replace(f,function(t,n){return n||l[t]||r.replace(":","")})},d.utcOffset=function(){return 15*-Math.round(this.$d.getTimezoneOffset()/15)},d.diff=function(t,h,f){var c,d=D.p(h),$=g(t),l=6e4*($.utcOffset()-this.utcOffset()),m=this-$,y=D.m(this,$);return y=(c={},c[a]=y/12,c[u]=y,c[o]=y/3,c[s]=(m-l)/6048e5,c[i]=(m-l)/864e5,c[r]=m/36e5,c[e]=m/6e4,c[n]=m/1e3,c)[d]||m,f?y:D.a(y)},d.daysInMonth=function(){return this.endOf(u).$D},d.$locale=function(){return m[this.$L]},d.locale=function(t,n){if(!t)return this.$L;var e=this.clone();return e.$L=M(t,n,!0),e},d.clone=function(){return D.w(this.$d,this)},d.toDate=function(){return new Date(this.valueOf())},d.toJSON=function(){return this.isValid()?this.toISOString():null},d.toISOString=function(){return this.$d.toISOString()},d.toString=function(){return this.$d.toUTCString()},c}();return g.prototype=v.prototype,g.extend=function(t,n){return t(n,v,g),g},g.locale=M,g.isDayjs=y,g.unix=function(t){return g(1e3*t)},g.en=m[l],g.Ls=m,g});
+!function(t,n){module.exports=n();}(commonjsGlobal,function(){var t="millisecond",n="second",e="minute",r="hour",i="day",s="week",u="month",o="quarter",a="year",h=/^(\d{4})-?(\d{1,2})-?(\d{0,2})[^0-9]*(\d{1,2})?:?(\d{1,2})?:?(\d{1,2})?.?(\d{1,3})?$/,f=/\[([^\]]+)]|Y{2,4}|M{1,4}|D{1,2}|d{1,4}|H{1,2}|h{1,2}|a|A|m{1,2}|s{1,2}|Z{1,2}|SSS/g,c=function(t,n,e){var r=String(t);return !r||r.length>=n?t:""+Array(n+1-r.length).join(e)+t},d={s:c,z:function(t){var n=-t.utcOffset(),e=Math.abs(n),r=Math.floor(e/60),i=e%60;return (n<=0?"+":"-")+c(r,2,"0")+":"+c(i,2,"0")},m:function(t,n){var e=12*(n.year()-t.year())+(n.month()-t.month()),r=t.clone().add(e,u),i=n-r<0,s=t.clone().add(e+(i?-1:1),u);return Number(-(e+(n-r)/(i?r-s:s-r))||0)},a:function(t){return t<0?Math.ceil(t)||0:Math.floor(t)},p:function(h){return {M:u,y:a,w:s,d:i,D:"date",h:r,m:e,s:n,ms:t,Q:o}[h]||String(h||"").toLowerCase().replace(/s$/,"")},u:function(t){return void 0===t}},$={name:"en",weekdays:"Sunday_Monday_Tuesday_Wednesday_Thursday_Friday_Saturday".split("_"),months:"January_February_March_April_May_June_July_August_September_October_November_December".split("_")},l="en",m={};m[l]=$;var y=function(t){return t instanceof v},M=function(t,n,e){var r;if(!t)return l;if("string"==typeof t)m[t]&&(r=t),n&&(m[t]=n,r=t);else{var i=t.name;m[i]=t,r=i;}return !e&&r&&(l=r),r||!e&&l},g=function(t,n,e){if(y(t))return t.clone();var r=n?"string"==typeof n?{format:n,pl:e}:n:{};return r.date=t,new v(r)},D=d;D.l=M,D.i=y,D.w=function(t,n){return g(t,{locale:n.$L,utc:n.$u,$offset:n.$offset})};var v=function(){function c(t){this.$L=this.$L||M(t.locale,null,!0),this.parse(t);}var d=c.prototype;return d.parse=function(t){this.$d=function(t){var n=t.date,e=t.utc;if(null===n)return new Date(NaN);if(D.u(n))return new Date;if(n instanceof Date)return new Date(n);if("string"==typeof n&&!/Z$/i.test(n)){var r=n.match(h);if(r)return e?new Date(Date.UTC(r[1],r[2]-1,r[3]||1,r[4]||0,r[5]||0,r[6]||0,r[7]||0)):new Date(r[1],r[2]-1,r[3]||1,r[4]||0,r[5]||0,r[6]||0,r[7]||0)}return new Date(n)}(t),this.init();},d.init=function(){var t=this.$d;this.$y=t.getFullYear(),this.$M=t.getMonth(),this.$D=t.getDate(),this.$W=t.getDay(),this.$H=t.getHours(),this.$m=t.getMinutes(),this.$s=t.getSeconds(),this.$ms=t.getMilliseconds();},d.$utils=function(){return D},d.isValid=function(){return !("Invalid Date"===this.$d.toString())},d.isSame=function(t,n){var e=g(t);return this.startOf(n)<=e&&e<=this.endOf(n)},d.isAfter=function(t,n){return g(t)<this.startOf(n)},d.isBefore=function(t,n){return this.endOf(n)<g(t)},d.$g=function(t,n,e){return D.u(t)?this[n]:this.set(e,t)},d.year=function(t){return this.$g(t,"$y",a)},d.month=function(t){return this.$g(t,"$M",u)},d.day=function(t){return this.$g(t,"$W",i)},d.date=function(t){return this.$g(t,"$D","date")},d.hour=function(t){return this.$g(t,"$H",r)},d.minute=function(t){return this.$g(t,"$m",e)},d.second=function(t){return this.$g(t,"$s",n)},d.millisecond=function(n){return this.$g(n,"$ms",t)},d.unix=function(){return Math.floor(this.valueOf()/1e3)},d.valueOf=function(){return this.$d.getTime()},d.startOf=function(t,o){var h=this,f=!!D.u(o)||o,c=D.p(t),d=function(t,n){var e=D.w(h.$u?Date.UTC(h.$y,n,t):new Date(h.$y,n,t),h);return f?e:e.endOf(i)},$=function(t,n){return D.w(h.toDate()[t].apply(h.toDate(),(f?[0,0,0,0]:[23,59,59,999]).slice(n)),h)},l=this.$W,m=this.$M,y=this.$D,M="set"+(this.$u?"UTC":"");switch(c){case a:return f?d(1,0):d(31,11);case u:return f?d(1,m):d(0,m+1);case s:var g=this.$locale().weekStart||0,v=(l<g?l+7:l)-g;return d(f?y-v:y+(6-v),m);case i:case"date":return $(M+"Hours",0);case r:return $(M+"Minutes",1);case e:return $(M+"Seconds",2);case n:return $(M+"Milliseconds",3);default:return this.clone()}},d.endOf=function(t){return this.startOf(t,!1)},d.$set=function(s,o){var h,f=D.p(s),c="set"+(this.$u?"UTC":""),d=(h={},h[i]=c+"Date",h.date=c+"Date",h[u]=c+"Month",h[a]=c+"FullYear",h[r]=c+"Hours",h[e]=c+"Minutes",h[n]=c+"Seconds",h[t]=c+"Milliseconds",h)[f],$=f===i?this.$D+(o-this.$W):o;if(f===u||f===a){var l=this.clone().set("date",1);l.$d[d]($),l.init(),this.$d=l.set("date",Math.min(this.$D,l.daysInMonth())).toDate();}else d&&this.$d[d]($);return this.init(),this},d.set=function(t,n){return this.clone().$set(t,n)},d.get=function(t){return this[D.p(t)]()},d.add=function(t,o){var h,f=this;t=Number(t);var c=D.p(o),d=function(n){var e=g(f);return D.w(e.date(e.date()+Math.round(n*t)),f)};if(c===u)return this.set(u,this.$M+t);if(c===a)return this.set(a,this.$y+t);if(c===i)return d(1);if(c===s)return d(7);var $=(h={},h[e]=6e4,h[r]=36e5,h[n]=1e3,h)[c]||1,l=this.$d.getTime()+t*$;return D.w(l,this)},d.subtract=function(t,n){return this.add(-1*t,n)},d.format=function(t){var n=this;if(!this.isValid())return "Invalid Date";var e=t||"YYYY-MM-DDTHH:mm:ssZ",r=D.z(this),i=this.$locale(),s=this.$H,u=this.$m,o=this.$M,a=i.weekdays,h=i.months,c=function(t,r,i,s){return t&&(t[r]||t(n,e))||i[r].substr(0,s)},d=function(t){return D.s(s%12||12,t,"0")},$=i.meridiem||function(t,n,e){var r=t<12?"AM":"PM";return e?r.toLowerCase():r},l={YY:String(this.$y).slice(-2),YYYY:this.$y,M:o+1,MM:D.s(o+1,2,"0"),MMM:c(i.monthsShort,o,h,3),MMMM:h[o]||h(this,e),D:this.$D,DD:D.s(this.$D,2,"0"),d:String(this.$W),dd:c(i.weekdaysMin,this.$W,a,2),ddd:c(i.weekdaysShort,this.$W,a,3),dddd:a[this.$W],H:String(s),HH:D.s(s,2,"0"),h:d(1),hh:d(2),a:$(s,u,!0),A:$(s,u,!1),m:String(u),mm:D.s(u,2,"0"),s:String(this.$s),ss:D.s(this.$s,2,"0"),SSS:D.s(this.$ms,3,"0"),Z:r};return e.replace(f,function(t,n){return n||l[t]||r.replace(":","")})},d.utcOffset=function(){return 15*-Math.round(this.$d.getTimezoneOffset()/15)},d.diff=function(t,h,f){var c,d=D.p(h),$=g(t),l=6e4*($.utcOffset()-this.utcOffset()),m=this-$,y=D.m(this,$);return y=(c={},c[a]=y/12,c[u]=y,c[o]=y/3,c[s]=(m-l)/6048e5,c[i]=(m-l)/864e5,c[r]=m/36e5,c[e]=m/6e4,c[n]=m/1e3,c)[d]||m,f?y:D.a(y)},d.daysInMonth=function(){return this.endOf(u).$D},d.$locale=function(){return m[this.$L]},d.locale=function(t,n){if(!t)return this.$L;var e=this.clone(),r=M(t,n,!0);return r&&(e.$L=r),e},d.clone=function(){return D.w(this.$d,this)},d.toDate=function(){return new Date(this.valueOf())},d.toJSON=function(){return this.isValid()?this.toISOString():null},d.toISOString=function(){return this.$d.toISOString()},d.toString=function(){return this.$d.toUTCString()},c}();return g.prototype=v.prototype,g.extend=function(t,n){return t(n,v,g),g},g.locale=M,g.isDayjs=y,g.unix=function(t){return g(1e3*t)},g.en=m[l],g.Ls=m,g});
 });
 
 var utc = createCommonjsModule(function (module, exports) {
@@ -7309,7 +8980,7 @@ var advancedFormat = createCommonjsModule(function (module, exports) {
 });
 
 var weekOfYear = createCommonjsModule(function (module, exports) {
-!function(e,t){module.exports=t();}(commonjsGlobal,function(){var e="year";return function(t,i,n){var r=i.prototype;r.week=function(t){if(void 0===t&&(t=null),null!==t)return this.add(7*(t-this.week()),"day");var i=this.$locale().weekStart||0,r=n(this).endOf(e);if(0===i&&6!==r.day()&&11===this.month()&&31-this.date()<=r.day())return 1;var d=n(this).startOf(e),a=d.subtract(d.day()-i,"day").subtract(1,"millisecond"),o=this.diff(a,"week",!0);return Math.ceil(o)},r.weeks=function(e){return void 0===e&&(e=null),this.week(e)};}});
+!function(e,t){module.exports=t();}(commonjsGlobal,function(){var e="week",t="year";return function(i,n){var r=n.prototype;r.week=function(i){if(void 0===i&&(i=null),null!==i)return this.add(7*(i-this.week()),"day");var n=this.$locale().yearStart||1;if(11===this.month()&&this.date()>25){var r=this.startOf(t).add(1,t).date(n),f=this.endOf(e);if(r.isBefore(f))return 1}var s=this.startOf(t).date(n).startOf(e).subtract(1,"millisecond"),a=this.diff(s,e,!0);return a<0?this.startOf("week").week():Math.ceil(a)},r.weeks=function(e){return void 0===e&&(e=null),this.week(e)};}});
 });
 
 /**
@@ -7361,49 +9032,106 @@ class TimeApi {
         time.to = +time.to;
         let from = Number.MAX_SAFE_INTEGER, to = 0;
         const items = this.state.get('config.chart.items');
-        if (Object.keys(items).length === 0) {
-            return time;
-        }
-        if (time.from === 0 || time.to === 0) {
-            for (const itemId in items) {
-                const item = items[itemId];
-                if (item.time.start < from && item.time.start) {
-                    from = item.time.start;
+        if (Object.keys(items).length > 0) {
+            if (time.from === 0 || time.to === 0) {
+                for (const itemId in items) {
+                    const item = items[itemId];
+                    if (item.time.start < from && item.time.start) {
+                        from = item.time.start;
+                    }
+                    if (item.time.end > to) {
+                        to = item.time.end;
+                    }
                 }
-                if (item.time.end > to) {
-                    to = item.time.end;
+                if (time.from === 0) {
+                    time.from = this.date(from)
+                        .startOf(period)
+                        .valueOf();
+                }
+                if (time.to === 0) {
+                    time.to = this.date(to)
+                        .endOf(period)
+                        .valueOf();
                 }
             }
-            if (time.from === 0) {
-                time.from = this.date(from)
-                    .startOf(period)
-                    .valueOf();
-            }
-            if (time.to === 0) {
-                time.to = this.date(to)
-                    .endOf(period)
-                    .valueOf();
-            }
         }
-        time.finalFrom = time.from;
-        time.finalTo = time.to;
+        time.finalFrom = time.fromDate.startOf(period).valueOf();
+        time.finalTo = time.toDate.startOf(period).valueOf(); // - this.getSkippedTime(time.to, time);
         time = this.addAdditionalSpace(time);
         return time;
     }
     getCenter(time) {
         return time.leftGlobal + (time.rightGlobal - time.leftGlobal) / 2;
     }
-    timeToPixelOffset(milliseconds) {
-        const timePerPixel = this.state.get('_internal.chart.time.timePerPixel') || 1;
-        return milliseconds / timePerPixel;
+    getOffsetPxFromDates(date, levelDates, period, time) {
+        const milliseconds = date.valueOf();
+        let firstMatching;
+        // find first date that is after milliseconds
+        for (let i = 0, len = levelDates.length; i < len; i++) {
+            const date = levelDates[i];
+            if (date.rightGlobal >= milliseconds) {
+                firstMatching = levelDates[i];
+                break;
+            }
+        }
+        if (firstMatching) {
+            let localDiffMs = milliseconds - firstMatching.leftGlobal;
+            // if dates are skipped localDiffMs may be long as couple of periods
+            // and after subtraction will land couple of periods to early
+            // we need to define those periods and subtract them from localDiffMs
+            const missingPeriods = Math.floor(firstMatching.leftGlobalDate.startOf(period).diff(date.startOf(period), period, true));
+            if (missingPeriods) {
+                localDiffMs = date.add(missingPeriods, period).valueOf() - firstMatching.leftGlobal;
+            }
+            const localDiffPx = Math.round(localDiffMs / time.timePerPixel);
+            return firstMatching.currentView.leftPx + localDiffPx;
+        }
+        else {
+            // date is out of the current scope (view)
+            if (date.valueOf() < time.leftGlobal)
+                return 0;
+            return time.width;
+        }
     }
-    globalTimeToViewPixelOffset(milliseconds, withCompensation = false) {
-        const time = this.state.get('_internal.chart.time');
-        let xCompensation = this.state.get('config.scroll.compensation.x') || 0;
-        const viewPixelOffset = (milliseconds - time.leftGlobal) / time.timePerPixel;
-        if (withCompensation)
-            return viewPixelOffset + xCompensation;
-        return viewPixelOffset;
+    findDateAtOffsetPx(offsetPx, allPeriodDates) {
+        return allPeriodDates.find(date => date.leftPx >= offsetPx);
+    }
+    findDateAtTime(milliseconds, allPeriodDates) {
+        return allPeriodDates.find(date => date.rightGlobal >= milliseconds);
+    }
+    calculateScrollPosPxFromTime(milliseconds, time, scroll) {
+        if (!scroll)
+            scroll = this.state.get('config.scroll.horizontal');
+        if (!scroll.maxPosPx)
+            return 0;
+        if (!time)
+            time = this.state.get('_internal.chart.time');
+        const date = this.findDateAtTime(milliseconds, time.allDates[time.level]);
+        return Math.round(scroll.maxPosPx * date.leftPercent);
+    }
+    getDatesDiffPx(fromTime, toTime, dates, startToStart = true) {
+        if (fromTime === toTime && startToStart)
+            return 0;
+        let width = 0;
+        let startCounting = false;
+        let inverse = false;
+        if (toTime < fromTime) {
+            const initialFrom = fromTime;
+            fromTime = toTime;
+            toTime = initialFrom;
+            inverse = true;
+        }
+        for (const date of dates) {
+            if (date.leftGlobal >= fromTime) {
+                startCounting = true;
+            }
+            if (date.rightGlobal >= toTime) {
+                break;
+            }
+            if (startCounting)
+                width += date.width;
+        }
+        return inverse ? -width : width;
     }
 }
 
@@ -8527,30 +10255,33 @@ function getInternalApi(state) {
          *
          * @param {array} rowsWithParentsExpanded rows that have parent expanded- they are visible
          */
-        getVisibleRowsAndCompensation(rowsWithParentsExpanded) {
+        getVisibleRows(rowsWithParentsExpanded) {
+            if (rowsWithParentsExpanded.length === 0)
+                return [];
             const visibleRows = [];
+            let topRow = state.get('config.scroll.vertical.item');
+            if (!topRow)
+                topRow = rowsWithParentsExpanded[0];
+            const innerHeight = state.get('_internal.innerHeight');
+            let strictTopRow = rowsWithParentsExpanded.find(row => row.id === topRow.id);
+            let index = rowsWithParentsExpanded.indexOf(strictTopRow);
+            if (index === undefined)
+                return [];
             let currentRowsOffset = 0;
-            let rowOffset = 0;
-            const scrollTop = state.get('config.scroll.top');
-            const height = state.get('_internal.height');
-            let chartViewBottom = 0;
-            let compensation = 0;
-            for (const row of rowsWithParentsExpanded) {
+            for (let len = rowsWithParentsExpanded.length; index <= len; index++) {
+                const row = rowsWithParentsExpanded[index];
                 if (row === undefined)
                     continue;
-                chartViewBottom = scrollTop + height;
-                if (currentRowsOffset + row.height >= scrollTop && currentRowsOffset <= chartViewBottom) {
-                    row.top = rowOffset;
-                    compensation = row.top + scrollTop - currentRowsOffset;
-                    rowOffset += row.height;
+                if (currentRowsOffset <= innerHeight) {
+                    row.top = currentRowsOffset;
                     visibleRows.push(row);
                 }
                 currentRowsOffset += row.height;
-                if (currentRowsOffset >= chartViewBottom) {
+                if (currentRowsOffset >= innerHeight) {
                     break;
                 }
             }
-            return { visibleRows, compensation };
+            return visibleRows;
         },
         /**
          * Normalize mouse wheel event to get proper scroll metrics
@@ -8645,55 +10376,19 @@ function getInternalApi(state) {
             return Math.round(scrollTop);
         },
         time: new TimeApi(state),
-        /**
-         * Get scrollbar height - compute it from element
-         *
-         * @returns {number}
-         */
-        getScrollBarHeight(add = 0) {
-            const outer = document.createElement('div');
-            outer.style.visibility = 'hidden';
-            outer.style.height = '100px';
-            document.body.appendChild(outer);
-            const noScroll = outer.offsetHeight;
-            outer.style.msOverflowStyle = 'scrollbar';
-            outer.style.overflow = 'scroll';
-            const inner = document.createElement('div');
-            inner.style.height = '100%';
-            outer.appendChild(inner);
-            const withScroll = inner.offsetHeight;
-            outer.parentNode.removeChild(outer);
-            return noScroll - withScroll + add;
-        },
-        scrollToTime(toTime) {
+        scrollToTime(toTime, centered = true) {
             const time = state.get('_internal.chart.time');
-            state.update('config.scroll', scroll => {
-                const chartWidth = state.get('_internal.chart.dimensions.width');
-                const halfTime = (chartWidth / 2) * time.timePerPixel;
-                const leftGlobal = toTime - halfTime - time.finalFrom;
-                scroll.left = this.limitScrollLeft(time.totalViewDurationPx, chartWidth, leftGlobal / time.timePerPixel);
-                return scroll;
+            state.update('config.scroll.horizontal', (scrollHorizontal) => {
+                let leftGlobal = toTime;
+                if (centered) {
+                    const chartWidth = state.get('_internal.chart.dimensions.width');
+                    const halfChartTime = (chartWidth / 2) * time.timePerPixel;
+                    leftGlobal = toTime - halfChartTime;
+                }
+                scrollHorizontal.item = this.time.findDateAtTime(leftGlobal, time.allDates[time.level]);
+                scrollHorizontal.posPx = this.time.calculateScrollPosPxFromTime(scrollHorizontal.item.leftGlobal, time, scrollHorizontal);
+                return scrollHorizontal;
             });
-        },
-        /**
-         * Get grid blocks that are under specified rectangle
-         *
-         * @param {number} x beginging at chart-timeline bounding rect
-         * @param {number} y beginging at chart-timeline bounding rect
-         * @param {number} width
-         * @param {number} height
-         * @returns {array} array of {element, data}
-         */
-        getGridBlocksUnderRect(x, y, width, height) {
-            const main = state.get('_internal.elements.main');
-            if (!main)
-                return [];
-        },
-        getCompensationX() {
-            return state.get('config.scroll.compensation.x') || 0;
-        },
-        getCompensationY() {
-            return state.get('config.scroll.compensation.y') || 0;
         },
         getSVGIconSrc(svg) {
             if (typeof iconsCache[svg] === 'string')
@@ -8740,7 +10435,6 @@ function GSTC(options) {
         components: {
             Main
         },
-        scrollBarHeight: api.getScrollBarHeight(2),
         height: 0,
         treeMap: {},
         flatTreeMap: [],
@@ -8794,7 +10488,7 @@ function GSTC(options) {
         };
     });
     // @ts-ignore
-    const vido = Vido(state, api);
+    const vido = new Vido(state, api);
     api.setVido(vido);
     const app = vido.createApp({ component: Main, props: {}, element: options.element });
     const internalApi = app.vidoInstance.api;

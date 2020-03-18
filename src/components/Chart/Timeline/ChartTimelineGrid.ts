@@ -56,7 +56,7 @@ export default function ChartTimelineGrid(vido, props) {
    */
   function generateBlocks() {
     const width = state.get('_internal.chart.dimensions.width');
-    const height = state.get('_internal.height');
+    const height = state.get('_internal.innerHeight');
     const time = state.get('_internal.chart.time');
     const periodDates = state.get(`_internal.chart.time.levels.${time.level}`);
     if (!periodDates || periodDates.length === 0) {
@@ -64,10 +64,8 @@ export default function ChartTimelineGrid(vido, props) {
       return;
     }
     const visibleRows = state.get('_internal.list.visibleRows');
-    const xCompensation = api.getCompensationX();
-    const yCompensation = api.getCompensationY();
-    styleMap.style.height = height + Math.abs(yCompensation) + 'px';
-    styleMap.style.width = width + xCompensation + 'px';
+    styleMap.style.height = height + 'px';
+    styleMap.style.width = width + 'px';
     let top = 0;
     rowsWithBlocks.length = 0;
     for (const row of visibleRows) {
@@ -97,7 +95,7 @@ export default function ChartTimelineGrid(vido, props) {
       [
         '_internal.list.visibleRows;',
         `_internal.chart.time.levels`,
-        '_internal.height',
+        '_internal.innerHeight',
         '_internal.chart.dimensions.width'
       ],
       generateBlocks,

@@ -28,23 +28,11 @@ export default function ChartTimelineItems(vido, props = {}) {
   const styleMap = new StyleMap({}, true);
   function calculateStyle() {
     const width = state.get('_internal.chart.dimensions.width');
-    const height = state.get('_internal.height');
-    const yCompensation = api.getCompensationY();
-    const xCompensation = api.getCompensationX();
-    styleMap.style.width = width + xCompensation + 'px';
-    styleMap.style.height = height + Math.abs(yCompensation) + 'px';
+    const height = state.get('_internal.innerHeight');
+    styleMap.style.width = width + 'px';
+    styleMap.style.height = height + 'px';
   }
-  onDestroy(
-    state.subscribeAll(
-      [
-        '_internal.height',
-        '_internal.chart.dimensions.width',
-        'config.scroll.compensation',
-        '_internal.chart.time.dates.day'
-      ],
-      calculateStyle
-    )
-  );
+  onDestroy(state.subscribeAll(['_internal.innerHeight', '_internal.chart.dimensions.width'], calculateStyle));
 
   const rowsComponents = [];
   function createRowComponents() {

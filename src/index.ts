@@ -7,6 +7,7 @@
  * @license   AGPL-3.0
  */
 
+import 'pepjs';
 import Vido from '@neuronet.io/vido/vido.esm';
 //import Vido from '../../vido/vido.esm';
 import publicApi, { getInternalApi } from './api/Api';
@@ -19,7 +20,6 @@ function GSTC(options) {
     components: {
       Main
     },
-    scrollBarHeight: api.getScrollBarHeight(2),
     height: 0,
     treeMap: {},
     flatTreeMap: [],
@@ -74,7 +74,7 @@ function GSTC(options) {
     };
   });
   // @ts-ignore
-  const vido = Vido(state, api);
+  const vido = new Vido(state, api);
   api.setVido(vido);
   const app = vido.createApp({ component: Main, props: {}, element: options.element });
   const internalApi = app.vidoInstance.api;

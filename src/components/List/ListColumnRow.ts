@@ -194,19 +194,20 @@ export default function ListColumnRow(vido, props) {
       event.preventDefault();
       if (movementX) {
         state.update('config.list.columns.percent', percent => {
-          percent += movementX * state.get('config.scroll.xMultiplier');
+          percent += movementX;
           if (percent < 0) percent = 0;
           if (percent > 100) percent = 100;
           return percent;
         });
       } else if (movementY) {
-        state.update('config.scroll.top', top => {
+        // TODO
+        /*state.update('config.scroll.top', top => {
           top -= movementY * state.get('config.scroll.yMultiplier');
           const rowsHeight = state.get('_internal.list.rowsHeight');
-          const internalHeight = state.get('_internal.height');
+          const internalHeight = state.get('_internal.innerHeight');
           top = api.limitScrollTop(rowsHeight, internalHeight, top);
           return top;
-        });
+        });*/
       }
     }
   };

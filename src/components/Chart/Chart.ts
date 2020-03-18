@@ -11,25 +11,41 @@
 import ResizeObserver from 'resize-observer-polyfill';
 
 export default function Chart(vido, props = {}) {
-  const { api, state, onDestroy, Actions, update, html, StyleMap, createComponent } = vido;
+  const { api, state, onDestroy, Actions, update, html, createComponent } = vido;
   const componentName = 'chart';
 
-  const ChartCalendarComponent = state.get('config.components.ChartCalendar');
-  const ChartTimelineComponent = state.get('config.components.ChartTimeline');
+  const componentSubs = [];
+  let ChartCalendarComponent;
+  componentSubs.push(state.subscribe('config.components.ChartCalendar', value => (ChartCalendarComponent = value)));
+  let ChartTimelineComponent;
+  componentSubs.push(state.subscribe('config.components.ChartTimeline', value => (ChartTimelineComponent = value)));
+  let ScrollBarComponent;
+  componentSubs.push(state.subscribe('config.components.ScrollBar', value => (ScrollBarComponent = value)));
+
+  const ChartCalendar = createComponent(ChartCalendarComponent);
+  onDestroy(ChartCalendar.destroy);
+  const ChartTimeline = createComponent(ChartTimelineComponent);
+  onDestroy(ChartTimeline.destroy);
+  const ScrollBarHorizontal = createComponent(ScrollBarComponent, { type: 'horizontal' });
+  onDestroy(ScrollBarHorizontal.destroy);
+  const ScrollBarVertical = createComponent(ScrollBarComponent, { type: 'vertical' });
+  onDestroy(ScrollBarVertical.destroy);
+
+  onDestroy(() => {
+    componentSubs.forEach(unsub => unsub());
+  });
 
   let wrapper;
   onDestroy(state.subscribe('config.wrappers.Chart', value => (wrapper = value)));
 
-  const Calendar = createComponent(ChartCalendarComponent);
-  onDestroy(Calendar.destroy);
-  const Timeline = createComponent(ChartTimelineComponent);
-  onDestroy(Timeline.destroy);
-
   let className, classNameScroll, classNameScrollInner, scrollElement, scrollInnerElement;
   const componentActions = api.getActions(componentName);
 
+  let calculatedZoomMode = false;
+  onDestroy(state.subscribe('config.chart.time.calculatedZoomMode', zoomMode => (calculatedZoomMode = zoomMode)));
+
   onDestroy(
-    state.subscribe('config.classNames', value => {
+    state.subscribe('config.classNames', () => {
       className = api.getClass(componentName);
       classNameScroll = api.getClass('horizontal-scroll');
       classNameScrollInner = api.getClass('horizontal-scroll-inner');
@@ -37,74 +53,9 @@ export default function Chart(vido, props = {}) {
     })
   );
 
-  onDestroy(
-    state.subscribeAll(
-      ['_internal.chart.dimensions.width', '_internal.chart.time.totalViewDurationPx'],
-      function horizontalScroll() {
-        if (scrollElement) scrollElement.style.width = state.get('_internal.chart.dimensions.width') + 'px';
-        if (scrollInnerElement)
-          scrollInnerElement.style.width = state.get('_internal.chart.time.totalViewDurationPx') + 'px';
-      }
-    )
-  );
-
-  onDestroy(
-    state.subscribe('config.scroll.left', left => {
-      if (scrollElement) {
-        scrollElement.scrollLeft = left;
-      }
-    })
-  );
-
-  function onScrollHandler(event: MouseEvent) {
-    if (event.type === 'scroll') {
-      // @ts-ignore
-      const left = event.target.scrollLeft;
-      state.update('config.scroll.left', left);
-    }
-  }
-
-  const onScroll = {
-    handleEvent: onScrollHandler,
-    passive: true,
-    capture: false
-  };
-
   function onWheelHandler(event: WheelEvent) {
     if (event.type === 'wheel') {
-      const wheel = api.normalizeMouseWheelEvent(event);
-      const xMultiplier = state.get('config.scroll.xMultiplier');
-      const yMultiplier = state.get('config.scroll.yMultiplier');
-      const currentScrollLeft = state.get('config.scroll.left');
-      const totalViewDurationPx = state.get('_internal.chart.time.totalViewDurationPx');
-      if (event.shiftKey && wheel.y) {
-        const newScrollLeft = api.limitScrollLeft(
-          totalViewDurationPx,
-          chartWidth,
-          currentScrollLeft + wheel.y * xMultiplier
-        );
-        state.update('config.scroll.left', newScrollLeft); // will trigger scrollbar to move which will trigger scroll event
-      } else if (event.ctrlKey && wheel.y) {
-        event.preventDefault();
-        state.update('config.chart.time.zoom', currentZoom => {
-          if (wheel.y < 0) {
-            return currentZoom - 1;
-          }
-          return currentZoom + 1;
-        });
-      } else if (wheel.x) {
-        const currentScrollLeft = state.get('config.scroll.left');
-        state.update(
-          'config.scroll.left',
-          api.limitScrollLeft(totalViewDurationPx, chartWidth, currentScrollLeft + wheel.x * xMultiplier)
-        );
-      } else {
-        state.update('config.scroll.top', top => {
-          const rowsHeight = state.get('_internal.list.rowsHeight');
-          const internalHeight = state.get('_internal.height');
-          return api.limitScrollTop(rowsHeight, internalHeight, (top += wheel.y * yMultiplier));
-        });
-      }
+      // TODO
     }
   }
 
@@ -114,21 +65,6 @@ export default function Chart(vido, props = {}) {
     capture: false
   };
 
-  function bindElement(element) {
-    if (!scrollElement) {
-      scrollElement = element;
-      state.update('_internal.elements.horizontal-scroll', element);
-    }
-  }
-
-  function bindInnerScroll(element) {
-    scrollInnerElement = element;
-    const old = state.get('_internal.elements.horizontal-scroll-inner');
-    if (old !== element) state.update('_internal.elements.horizontal-scroll-inner', element);
-    if (!state.get('_internal.loaded.horizontal-scroll-inner'))
-      state.update('_internal.loaded.horizontal-scroll-inner', true);
-  }
-
   let chartWidth = 0;
   let ro;
   componentActions.push(function bindElement(element) {
@@ -136,7 +72,7 @@ export default function Chart(vido, props = {}) {
       ro = new ResizeObserver((entries, observer) => {
         const width = element.clientWidth;
         const height = element.clientHeight;
-        const innerWidth = width - state.get('_internal.scrollBarHeight');
+        const innerWidth = width - state.get('config.scroll.horizontal.size');
         if (chartWidth !== width) {
           chartWidth = width;
           state.update('_internal.chart.dimensions', { width, innerWidth, height });
@@ -153,17 +89,14 @@ export default function Chart(vido, props = {}) {
   });
 
   const actions = Actions.create(componentActions, { api, state });
-  const scrollActions = Actions.create([bindElement]);
-  const scrollAreaActions = Actions.create([bindInnerScroll]);
 
   return templateProps =>
     wrapper(
       html`
-        <div class=${className} data-actions=${actions} @wheel=${onWheel} @scroll=${onScroll}>
-          ${Calendar.html()}${Timeline.html()}
-          <div class=${classNameScroll} data-actions=${scrollActions} @scroll=${onScroll}>
-            <div class=${classNameScrollInner} style="height: 1px" data-actions=${scrollAreaActions} />
-          </div>
+        <div class=${className} data-actions=${actions} @wheel=${onWheel}>
+          ${ChartCalendar.html()}${ChartTimeline.html()}${ScrollBarVertical.html()}${calculatedZoomMode
+            ? null
+            : ScrollBarHorizontal.html()}
         </div>
       `,
       { vido, props: {}, templateProps }

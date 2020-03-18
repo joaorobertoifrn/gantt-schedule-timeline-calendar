@@ -42,78 +42,40 @@ export default function ChartCalendarDay(vido, props) {
   let className;
   onDestroy(
     state.subscribe('config.classNames', () => {
-      className = api.getClass(componentName, props);
+      className = api.getClass(componentName);
     })
   );
 
-  let current = '';
+  let additionalClass = '';
   let time, htmlFormatted;
-  const styleMap = new StyleMap({ width: '', visibility: 'visible' }),
-    scrollStyleMap = new StyleMap({
-      overflow: 'hidden',
-      'text-align': 'left'
-    });
+  const styleMap = new StyleMap({ width: '0px' });
 
   let formatClassName = '';
   function updateDate() {
     if (!props) return;
-    const cache = state.get('_internal.cache.calendar');
     const level = state.get(`config.chart.calendar.levels.${props.level}`);
-    const useCache = false; //level.doNotUseCache ? false : true;
-    styleMap.style.width = props.date.width + 'px';
-    styleMap.style.visibility = 'visible';
-    scrollStyleMap.style = { overflow: 'hidden', 'text-align': 'left', 'margin-left': props.date.subPx + 8 + 'px' };
+    styleMap.style.width = props.date.currentView.width + 'px';
     time = state.get('_internal.chart.time');
-    const cacheKey = `${new Date(props.date.leftGlobal).toISOString()}-${props.date.period}-${props.level}-${
-      time.zoom
-    }`;
-    if (!cache[cacheKey]) {
-      cache[cacheKey] = {};
-    }
-    let timeStart, timeEnd;
-    if (useCache && cache[cacheKey].timeStart) {
-      timeStart = cache[cacheKey].timeStart;
-      timeEnd = cache[cacheKey].timeEnd;
+    const formatting = level.formats.find(formatting => +time.zoom <= +formatting.zoomTo);
+    if (props.date.current) {
+      additionalClass = ' gstc-current';
+    } else if (props.date.next) {
+      additionalClass = ' gstc-next';
+    } else if (props.date.previous) {
+      additionalClass = ' gstc-previous';
     } else {
-      timeStart = api.time.date(props.date.leftGlobal);
-      timeEnd = api.time.date(props.date.rightGlobal);
-      cache[cacheKey].timeStart = timeStart;
-      cache[cacheKey].timeEnd = timeEnd;
+      additionalClass = '';
     }
-    const formats = level.formats;
-    const formatting = formats.find(formatting => +time.zoom <= +formatting.zoomTo);
-    let format;
-    if (useCache && cache[cacheKey].format) {
-      format = cache[cacheKey].format;
-    } else {
-      format = formatting ? formatting.format({ timeStart, timeEnd, className, vido, props }) : null;
-      cache[cacheKey].format = format;
-    }
-    if (useCache && cache[cacheKey].current) {
-      current = cache[cacheKey].current;
-    } else {
-      if (timeStart.format(props.currentDateFormat) === props.currentDate) {
-        current = ' gstc-current';
-      } else if (timeStart.subtract(1, props.date.period).format(props.currentDateFormat) === props.currentDate) {
-        current = ' gstc-next';
-      } else if (timeStart.add(1, props.date.period).format(props.currentDateFormat) === props.currentDate) {
-        current = ' gstc-previous';
-      } else {
-        current = '';
-      }
-      cache[cacheKey].current = current;
-    }
-    let finalClassName = className + '-content ' + className + `-content--${props.date.period}` + current;
+    let finalClassName = className + '-content ' + className + `-content--${props.date.period}` + additionalClass;
     if (formatting.className) {
       finalClassName += ' ' + formatting.className;
       formatClassName = ' ' + formatting.className;
     } else {
       formatClassName = '';
     }
-    // updating cache state is not necessary because it is object and nobody listen to cache
     htmlFormatted = html`
       <div class=${finalClassName}>
-        ${format}
+        ${props.date.formatted}
       </div>
     `;
     update();
@@ -160,7 +122,7 @@ export default function ChartCalendarDay(vido, props) {
             ' ' +
             className +
             `--level-${props.level}` +
-            current +
+            additionalClass +
             formatClassName}
           style=${styleMap}
           data-actions=${actions}

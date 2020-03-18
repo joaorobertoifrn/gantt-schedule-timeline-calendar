@@ -11,7 +11,15 @@ import defaultConfigFn from '../default-config';
 import TimeApi from './Time';
 import State from 'deep-state-observer';
 import dayjs from 'dayjs';
-import { Config, Period, ChartInternalTime } from '../types';
+import {
+  Config,
+  Period,
+  Scroll,
+  ChartInternalTimeLevel,
+  ChartInternalTime,
+  ScrollType,
+  ScrollTypeHorizontal
+} from '../types';
 import { mergeDeep } from '@neuronet.io/vido/helpers';
 const lib = 'gantt-schedule-timeline-calendar';
 
@@ -242,29 +250,29 @@ export function getInternalApi(state) {
      *
      * @param {array} rowsWithParentsExpanded rows that have parent expanded- they are visible
      */
-    getVisibleRowsAndCompensation(rowsWithParentsExpanded) {
+    getVisibleRows(rowsWithParentsExpanded) {
+      if (rowsWithParentsExpanded.length === 0) return [];
       const visibleRows = [];
+      let topRow = state.get('config.scroll.vertical.item');
+      if (!topRow) topRow = rowsWithParentsExpanded[0];
+      const innerHeight = state.get('_internal.innerHeight');
+      let strictTopRow = rowsWithParentsExpanded.find(row => row.id === topRow.id);
+      let index = rowsWithParentsExpanded.indexOf(strictTopRow);
+      if (index === undefined) return [];
       let currentRowsOffset = 0;
-      let rowOffset = 0;
-      const scrollTop = state.get('config.scroll.top');
-      const height = state.get('_internal.height');
-      let chartViewBottom = 0;
-      let compensation = 0;
-      for (const row of rowsWithParentsExpanded) {
+      for (let len = rowsWithParentsExpanded.length; index <= len; index++) {
+        const row = rowsWithParentsExpanded[index];
         if (row === undefined) continue;
-        chartViewBottom = scrollTop + height;
-        if (currentRowsOffset + row.height >= scrollTop && currentRowsOffset <= chartViewBottom) {
-          row.top = rowOffset;
-          compensation = row.top + scrollTop - currentRowsOffset;
-          rowOffset += row.height;
+        if (currentRowsOffset <= innerHeight) {
+          row.top = currentRowsOffset;
           visibleRows.push(row);
         }
         currentRowsOffset += row.height;
-        if (currentRowsOffset >= chartViewBottom) {
+        if (currentRowsOffset >= innerHeight) {
           break;
         }
       }
-      return { visibleRows, compensation };
+      return visibleRows;
     },
 
     /**
@@ -363,58 +371,23 @@ export function getInternalApi(state) {
 
     time: new TimeApi(state),
 
-    /**
-     * Get scrollbar height - compute it from element
-     *
-     * @returns {number}
-     */
-    getScrollBarHeight(add = 0) {
-      const outer = document.createElement('div');
-      outer.style.visibility = 'hidden';
-      outer.style.height = '100px';
-      document.body.appendChild(outer);
-      const noScroll = outer.offsetHeight;
-      outer.style.msOverflowStyle = 'scrollbar';
-      outer.style.overflow = 'scroll';
-      const inner = document.createElement('div');
-      inner.style.height = '100%';
-      outer.appendChild(inner);
-      const withScroll = inner.offsetHeight;
-      outer.parentNode.removeChild(outer);
-      return noScroll - withScroll + add;
-    },
-
-    scrollToTime(toTime: number) {
-      const time = state.get('_internal.chart.time');
-      state.update('config.scroll', scroll => {
-        const chartWidth = state.get('_internal.chart.dimensions.width');
-        const halfTime = (chartWidth / 2) * time.timePerPixel;
-        const leftGlobal = toTime - halfTime - time.finalFrom;
-        scroll.left = this.limitScrollLeft(time.totalViewDurationPx, chartWidth, leftGlobal / time.timePerPixel);
-        return scroll;
+    scrollToTime(toTime: number, centered = true) {
+      const time: ChartInternalTime = state.get('_internal.chart.time');
+      state.update('config.scroll.horizontal', (scrollHorizontal: ScrollTypeHorizontal) => {
+        let leftGlobal = toTime;
+        if (centered) {
+          const chartWidth = state.get('_internal.chart.dimensions.width');
+          const halfChartTime = (chartWidth / 2) * time.timePerPixel;
+          leftGlobal = toTime - halfChartTime;
+        }
+        scrollHorizontal.item = this.time.findDateAtTime(leftGlobal, time.allDates[time.level]);
+        scrollHorizontal.posPx = this.time.calculateScrollPosPxFromTime(
+          scrollHorizontal.item.leftGlobal,
+          time,
+          scrollHorizontal
+        );
+        return scrollHorizontal;
       });
-    },
-
-    /**
-     * Get grid blocks that are under specified rectangle
-     *
-     * @param {number} x beginging at chart-timeline bounding rect
-     * @param {number} y beginging at chart-timeline bounding rect
-     * @param {number} width
-     * @param {number} height
-     * @returns {array} array of {element, data}
-     */
-    getGridBlocksUnderRect(x, y, width, height) {
-      const main = state.get('_internal.elements.main');
-      if (!main) return [];
-    },
-
-    getCompensationX() {
-      return state.get('config.scroll.compensation.x') || 0;
-    },
-
-    getCompensationY() {
-      return state.get('config.scroll.compensation.y') || 0;
     },
 
     getSVGIconSrc(svg) {

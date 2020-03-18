@@ -56,7 +56,6 @@ export default function ListColumn(vido, props) {
 
   const widthStyleMap = new StyleMap({ width: '', '--width': '' });
   const containerStyleMap = new StyleMap({ width: '', height: '' });
-  const scrollCompensationStyleMap = new StyleMap({ width: '', height: '' });
 
   let column,
     columnPath = `config.list.columns.data.${props.columnId}`;
@@ -69,15 +68,12 @@ export default function ListColumn(vido, props) {
   let width;
   function calculateStyle() {
     const list = state.get('config.list');
-    const compensationY = state.get('config.scroll.compensation.y');
     calculatedWidth = list.columns.data[column.id].width * list.columns.percent * 0.01;
     width = calculatedWidth;
-    const height = state.get('_internal.height');
+    const height = state.get('_internal.innerHeight');
     widthStyleMap.style.width = width + 'px';
     widthStyleMap.style['--width'] = width + 'px';
     containerStyleMap.style.height = height + 'px';
-    scrollCompensationStyleMap.style.height = height + Math.abs(compensationY) + 'px';
-    scrollCompensationStyleMap.style.transform = `translate(0px, ${compensationY}px)`;
   }
   let styleSub = state.subscribeAll(
     [
@@ -85,8 +81,7 @@ export default function ListColumn(vido, props) {
       'config.list.columns.resizer.width',
       `config.list.columns.data.${column.id}.width`,
       '_internal.chart.dimensions.width',
-      '_internal.height',
-      'config.scroll.compensation.y',
+      '_internal.innerHeight',
       '_internal.list.width'
     ],
     calculateStyle,
@@ -116,8 +111,7 @@ export default function ListColumn(vido, props) {
         'config.list.columns.resizer.width',
         `config.list.columns.data.${column.id}.width`,
         '_internal.chart.dimensions.width',
-        '_internal.height',
-        'config.scroll.compensation.y',
+        '_internal.innerHeight',
         '_internal.list.width'
       ],
       calculateStyle,
@@ -172,9 +166,7 @@ export default function ListColumn(vido, props) {
         <div class=${className} data-actions=${headerActions} style=${widthStyleMap}>
           ${ListColumnHeader.html()}
           <div class=${classNameContainer} style=${containerStyleMap} data-actions=${rowActions}>
-            <div class=${classNameContainer + '--scroll-compensation'} style=${scrollCompensationStyleMap}>
-              ${visibleRows.map(getRowHtml)}
-            </div>
+            ${visibleRows.map(getRowHtml)}
           </div>
         </div>
       `,

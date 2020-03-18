@@ -87,10 +87,9 @@
               }
               const ghost = element.cloneNode(true);
               const style = getComputedStyle(element);
-              const compensationY = state.get('config.scroll.compensation.y');
               ghost.style.position = 'absolute';
-              ghost.style.left = normalized.clientX - ganttLeft - movement.itemLeftCompensation + 'px';
-              const itemTop = normalized.clientY - ganttTop - element.offsetTop - compensationY + parseInt(style['margin-top']);
+              ghost.style.left = normalized.clientX - ganttLeft + 'px';
+              const itemTop = normalized.clientY - ganttTop - element.offsetTop + parseInt(style['margin-top']);
               movement.itemTop = itemTop;
               ghost.style.top = normalized.clientY - ganttTop - itemTop + 'px';
               ghost.style.width = style.width;
@@ -108,7 +107,7 @@
           function moveGhost(data, normalized) {
               if (options.ghostNode) {
                   const movement = getMovement(data);
-                  const left = normalized.clientX - movement.ganttLeft - movement.itemLeftCompensation;
+                  const left = normalized.clientX - movement.ganttLeft;
                   movement.ghost.style.left = left + 'px';
                   movement.ghost.style.top =
                       normalized.clientY -
@@ -174,7 +173,6 @@
                   movement.ganttTop = ganttRect.top;
                   movement.ganttLeft = ganttRect.left;
                   movement.itemX = Math.round((item.time.start - chartLeftTime) / timePerPixel);
-                  movement.itemLeftCompensation = normalized.clientX - movement.ganttLeft - movement.itemX;
                   saveMovement(data.item.id, movement);
                   createGhost(data, normalized, ganttRect.left, ganttRect.top);
               }, options.wait);
@@ -195,7 +193,6 @@
               movement.ganttTop = ganttRect.top;
               movement.ganttLeft = ganttRect.left;
               movement.itemX = (item.time.end - chartLeftTime) / timePerPixel;
-              movement.itemLeftCompensation = normalized.clientX - movement.ganttLeft - movement.itemX;
               saveMovement(data.item.id, movement);
           }
           function isCollision(rowId, itemId, start, end) {
@@ -231,7 +228,7 @@
           }
           function movementX(normalized, row, item, zoom, timePerPixel) {
               const movement = getMovement(data);
-              const left = normalized.clientX - movement.ganttLeft - movement.itemLeftCompensation;
+              const left = normalized.clientX - movement.ganttLeft;
               moveGhost(data, normalized);
               const leftMs = state.get('_internal.chart.time.leftGlobal') + left * timePerPixel;
               const add = leftMs - item.time.start;
@@ -253,7 +250,7 @@
               }
               const time = state.get('_internal.chart.time');
               const movement = getMovement(data);
-              const left = normalized.clientX - movement.ganttLeft - movement.itemLeftCompensation;
+              const left = normalized.clientX - movement.ganttLeft;
               const leftMs = time.leftGlobal + left * timePerPixel;
               const add = leftMs - item.time.end;
               if (item.time.end + add < item.time.start) {
@@ -276,10 +273,9 @@
               const movement = getMovement(data);
               const top = normalized.clientY - movement.ganttTop;
               const visibleRows = state.get('_internal.list.visibleRows');
-              const compensationY = state.get('config.scroll.compensation.y');
               let index = 0;
               for (const currentRow of visibleRows) {
-                  if (currentRow.top + compensationY > top) {
+                  if (currentRow.top > top) {
                       if (index > 0) {
                           return index - 1;
                       }

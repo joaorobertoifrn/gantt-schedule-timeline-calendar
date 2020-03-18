@@ -8,6 +8,7 @@
  */
 
 import Main from './components/Main';
+import ScrollBar from './components/ScrollBar';
 import List from './components/List/List';
 import ListColumn from './components/List/ListColumn';
 import ListColumnHeader from './components/List/ListColumnHeader';
@@ -31,6 +32,7 @@ import { Config } from './types';
 
 export const actionNames = [
   'main',
+  'scroll-bar',
   'list',
   'list-column',
   'list-column-header',
@@ -73,10 +75,11 @@ function defaultConfig(): Config {
   return {
     plugins: [],
     plugin: {},
-    height: 822,
+    innerHeight: 822,
     headerHeight: 72,
     components: {
       Main,
+      ScrollBar,
       List,
       ListColumn,
       ListColumnHeader,
@@ -98,6 +101,9 @@ function defaultConfig(): Config {
     },
     wrappers: {
       Main(input) {
+        return input;
+      },
+      ScrollBar(input) {
         return input;
       },
       List(input) {
@@ -193,19 +199,21 @@ function defaultConfig(): Config {
       }
     },
     scroll: {
-      propagate: true,
-      smooth: false,
-      top: 0,
-      left: 0,
-      xMultiplier: 3,
-      yMultiplier: 3,
-      percent: {
-        top: 0,
-        left: 0
+      horizontal: {
+        size: 12,
+        minInnerSize: 40,
+        item: null,
+        posPx: 0,
+        maxPosPx: 0,
+        area: 0
       },
-      compensation: {
-        x: 0,
-        y: 0
+      vertical: {
+        size: 10,
+        minInnerSize: 40,
+        item: null,
+        posPx: 0,
+        maxPosPx: 0,
+        area: 0
       }
     },
     chart: {
@@ -220,7 +228,12 @@ function defaultConfig(): Config {
         centerGlobal: 0,
         rightGlobal: 0,
         levels: [],
-        calculatedZoomMode: false
+        calculatedZoomMode: false,
+        onLevelDate: [],
+        onLevelDates: [],
+        onAllLevelDates: [],
+        onCurrentViewLevelDates: [],
+        allDates: []
       },
       calendar: {
         expand: true,

@@ -55,8 +55,7 @@ const ChartTimelineItemsRow = (vido, props) => {
   const updateDom = () => {
     const chart = state.get('_internal.chart');
     shouldDetach = false;
-    const xCompensation = api.getCompensationX();
-    styleMap.style.width = chart.dimensions.width + xCompensation + 'px';
+    styleMap.style.width = chart.dimensions.width + 'px';
     if (!props) {
       shouldDetach = true;
       return;
@@ -100,6 +99,7 @@ const ChartTimelineItemsRow = (vido, props) => {
   onChange((changedProps, options) => {
     if (options.leave || changedProps.row === undefined) {
       shouldDetach = true;
+      reuseComponents(itemComponents, [], item => ({ row: undefined, item }), ItemComponent);
       return update();
     }
     props = changedProps;

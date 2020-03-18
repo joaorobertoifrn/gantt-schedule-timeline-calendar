@@ -45,16 +45,10 @@ export default function ChartTimeline(vido, props) {
     innerStyleMap = new StyleMap({});
 
   function calculateStyle() {
-    const xCompensation = api.getCompensationX();
-    const yCompensation = api.getCompensationY();
     const width = state.get('_internal.chart.dimensions.width');
     const height = state.get('_internal.list.rowsHeight');
-    styleMap.style.height = state.get('_internal.height') + 'px';
+    styleMap.style.height = state.get('_internal.innerHeight') + 'px';
     styleMap.style['--height'] = styleMap.style.height;
-    styleMap.style['--negative-compensation-x'] = xCompensation + 'px';
-    styleMap.style['--compensation-x'] = Math.round(Math.abs(xCompensation)) + 'px';
-    styleMap.style['--negative-compensation-y'] = yCompensation + 'px';
-    styleMap.style['--compensation-y'] = Math.abs(yCompensation) + 'px';
     if (width) {
       styleMap.style.width = width + 'px';
       styleMap.style['--width'] = width + 'px';
@@ -64,22 +58,19 @@ export default function ChartTimeline(vido, props) {
     }
     innerStyleMap.style.height = height + 'px';
     if (width) {
-      innerStyleMap.style.width = width + xCompensation + 'px';
+      innerStyleMap.style.width = width + 'px';
     } else {
       innerStyleMap.style.width = '0px';
     }
-    //innerStyleMap.style.transform = `translate(-${xCompensation}px, ${yCompensation}px)`;
-    innerStyleMap.style['margin-left'] = -xCompensation + 'px';
     update();
   }
 
   onDestroy(
     state.subscribeAll(
       [
-        '_internal.height',
+        '_internal.innerHeight',
         '_internal.chart.dimensions.width',
         '_internal.list.rowsHeight',
-        'config.scroll.compensation',
         '_internal.chart.time.dates.day'
       ],
       calculateStyle

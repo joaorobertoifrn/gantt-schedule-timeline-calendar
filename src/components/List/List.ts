@@ -95,23 +95,8 @@ export default function List(vido, props = {}) {
     listColumnUnsub();
   });
 
-  function onScroll(event) {
-    event.stopPropagation();
-    event.preventDefault();
-    if (event.type === 'scroll') {
-      state.update('config.scroll.top', event.target.scrollTop);
-    } else {
-      const wheel = api.normalizeMouseWheelEvent(event);
-      state.update('config.scroll.top', top => {
-        const rowsHeight = state.get('_internal.list.rowsHeight');
-        const internalHeight = state.get('_internal.height');
-        return api.limitScrollTop(
-          rowsHeight,
-          internalHeight,
-          (top += wheel.y * state.get('config.scroll.yMultiplier'))
-        );
-      });
-    }
+  function onWheel(ev) {
+    // TODO
   }
 
   let width;
@@ -143,7 +128,7 @@ export default function List(vido, props = {}) {
       cache(
         list.columns.percent > 0
           ? html`
-              <div class=${className} data-actions=${actions} style=${styleMap} @scroll=${onScroll} @wheel=${onScroll}>
+              <div class=${className} data-actions=${actions} style=${styleMap} @wheel=${onWheel}>
                 ${listColumns.map(c => c.html())}
               </div>
             `

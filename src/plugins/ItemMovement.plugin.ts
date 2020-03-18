@@ -25,7 +25,6 @@ export interface Movement {
   resizing: boolean;
   waiting: boolean;
   ghost?: HTMLElement;
-  itemLeftCompensation?: number;
   itemTop?: number;
   itemX?: number;
   ganttTop?: number;
@@ -114,10 +113,9 @@ export default function ItemMovement(options: Options = {}) {
       }
       const ghost = element.cloneNode(true) as HTMLElement;
       const style = getComputedStyle(element);
-      const compensationY = state.get('config.scroll.compensation.y');
       ghost.style.position = 'absolute';
-      ghost.style.left = normalized.clientX - ganttLeft - movement.itemLeftCompensation + 'px';
-      const itemTop = normalized.clientY - ganttTop - element.offsetTop - compensationY + parseInt(style['margin-top']);
+      ghost.style.left = normalized.clientX - ganttLeft + 'px';
+      const itemTop = normalized.clientY - ganttTop - element.offsetTop + parseInt(style['margin-top']);
       movement.itemTop = itemTop;
       ghost.style.top = normalized.clientY - ganttTop - itemTop + 'px';
       ghost.style.width = style.width;
@@ -136,7 +134,7 @@ export default function ItemMovement(options: Options = {}) {
     function moveGhost(data, normalized) {
       if (options.ghostNode) {
         const movement = getMovement(data);
-        const left = normalized.clientX - movement.ganttLeft - movement.itemLeftCompensation;
+        const left = normalized.clientX - movement.ganttLeft;
         movement.ghost.style.left = left + 'px';
         movement.ghost.style.top =
           normalized.clientY -
@@ -209,7 +207,6 @@ export default function ItemMovement(options: Options = {}) {
         movement.ganttTop = ganttRect.top;
         movement.ganttLeft = ganttRect.left;
         movement.itemX = Math.round((item.time.start - chartLeftTime) / timePerPixel);
-        movement.itemLeftCompensation = normalized.clientX - movement.ganttLeft - movement.itemX;
         saveMovement(data.item.id, movement);
         createGhost(data, normalized, ganttRect.left, ganttRect.top);
       }, options.wait);
@@ -231,7 +228,6 @@ export default function ItemMovement(options: Options = {}) {
       movement.ganttTop = ganttRect.top;
       movement.ganttLeft = ganttRect.left;
       movement.itemX = (item.time.end - chartLeftTime) / timePerPixel;
-      movement.itemLeftCompensation = normalized.clientX - movement.ganttLeft - movement.itemX;
       saveMovement(data.item.id, movement);
     }
 
@@ -269,7 +265,7 @@ export default function ItemMovement(options: Options = {}) {
 
     function movementX(normalized, row, item, zoom, timePerPixel) {
       const movement = getMovement(data);
-      const left = normalized.clientX - movement.ganttLeft - movement.itemLeftCompensation;
+      const left = normalized.clientX - movement.ganttLeft;
       moveGhost(data, normalized);
       const leftMs = state.get('_internal.chart.time.leftGlobal') + left * timePerPixel;
       const add = leftMs - item.time.start;
@@ -292,7 +288,7 @@ export default function ItemMovement(options: Options = {}) {
       }
       const time = state.get('_internal.chart.time');
       const movement = getMovement(data);
-      const left = normalized.clientX - movement.ganttLeft - movement.itemLeftCompensation;
+      const left = normalized.clientX - movement.ganttLeft;
       const leftMs = time.leftGlobal + left * timePerPixel;
       const add = leftMs - item.time.end;
       if (item.time.end + add < item.time.start) {
@@ -316,10 +312,9 @@ export default function ItemMovement(options: Options = {}) {
       const movement = getMovement(data);
       const top = normalized.clientY - movement.ganttTop;
       const visibleRows = state.get('_internal.list.visibleRows');
-      const compensationY = state.get('config.scroll.compensation.y');
       let index = 0;
       for (const currentRow of visibleRows) {
-        if (currentRow.top + compensationY > top) {
+        if (currentRow.top > top) {
           if (index > 0) {
             return index - 1;
           }

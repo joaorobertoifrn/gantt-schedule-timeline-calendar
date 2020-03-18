@@ -33,17 +33,15 @@ class BindElementAction {
 }
 
 export default function ChartTimelineItemsRowItem(vido, props) {
-  const { api, state, onDestroy, Detach, Actions, update, html, onChange, unsafeHTML, StyleMap } = vido;
+  const { api, state, onDestroy, Detach, Actions, update, html, svg, onChange, unsafeHTML, StyleMap } = vido;
   let wrapper;
   onDestroy(state.subscribe('config.wrappers.ChartTimelineItemsRowItem', value => (wrapper = value)));
   let itemLeftPx = 0,
     itemWidthPx = 0,
-    leave = false,
-    cutLeft = false,
-    cutRight = false;
+    leave = false;
   const styleMap = new StyleMap({ width: '', height: '', left: '' }),
-    leftCutStyleMap = new StyleMap({ 'margin-left': '0px' }),
-    rightCutStyleMap = new StyleMap({ 'margin-right': '0px' }),
+    leftCutStyleMap = new StyleMap({}),
+    rightCutStyleMap = new StyleMap({}),
     actionProps = {
       item: props.item,
       row: props.row,
@@ -54,41 +52,49 @@ export default function ChartTimelineItemsRowItem(vido, props) {
     };
   let shouldDetach = false;
 
-  function updateItem() {
-    if (leave) return;
-    const time = state.get('_internal.chart.time');
-    itemLeftPx = api.time.globalTimeToViewPixelOffset(props.item.time.start);
-    itemLeftPx = Math.round(itemLeftPx * 10) * 0.1;
-    itemWidthPx = (props.item.time.end - props.item.time.start) / time.timePerPixel;
-    itemWidthPx -= state.get('config.chart.spacing') || 0;
-    if (itemWidthPx) {
-      itemWidthPx = Math.round(itemWidthPx * 10) * 0.1;
+  function updateItem(time = state.get('_internal.chart.time')) {
+    if (leave || time.levels.length === 0 || !time.levels[time.level] || time.levels[time.level].length === 0) {
+      shouldDetach = true;
+      return;
     }
+    itemLeftPx = api.time.getOffsetPxFromDates(
+      api.time.date(props.item.time.start),
+      time.levels[time.level],
+      time.period,
+      time
+    );
+    const itemRightPx = api.time.getOffsetPxFromDates(
+      api.time.date(props.item.time.end),
+      time.levels[time.level],
+      time.period,
+      time
+    );
+    itemWidthPx = itemRightPx - itemLeftPx;
+    itemWidthPx -= state.get('config.chart.spacing') || 0;
     if (props.item.time.start < time.leftGlobal) {
-      leftCutStyleMap.style['margin-left'] = (time.leftGlobal - props.item.time.start) / time.timePerPixel + 'px';
-      cutLeft = true;
+      const diff = (time.leftGlobal - props.item.time.start) / time.timePerPixel;
+      //leftCutStyleMap.style['margin-left'] = diff + 'px';
+      leftCutStyleMap.style.display = 'block';
     } else {
-      leftCutStyleMap.style['margin-left'] = '0px';
-      cutLeft = false;
+      //leftCutStyleMap.style['margin-left'] = '0px';
+      leftCutStyleMap.style.display = 'none';
     }
     if (props.item.time.end > time.rightGlobal) {
-      rightCutStyleMap.style['margin-right'] = (props.item.time.end - time.rightGlobal) / time.timePerPixel + 'px';
-      cutRight = true;
+      const diff = (props.item.time.end - time.rightGlobal) / time.timePerPixel;
+      //rightCutStyleMap.style['margin-right'] = diff + 'px';
+      rightCutStyleMap.style.display = 'block';
     } else {
-      cutRight = false;
-      rightCutStyleMap.style['margin-right'] = '0px';
+      rightCutStyleMap.style.display = 'none';
     }
-
     const oldWidth = styleMap.style.width;
     const oldLeft = styleMap.style.left;
-    const xCompensation = api.getCompensationX();
     styleMap.setStyle({});
     const inViewPort = api.isItemInViewport(props.item, time.leftGlobal, time.rightGlobal);
     shouldDetach = !inViewPort;
     if (inViewPort) {
       // update style only when visible to prevent browser's recalculate style
       styleMap.style.width = itemWidthPx + 'px';
-      styleMap.style.left = itemLeftPx + xCompensation + 'px';
+      styleMap.style.left = itemLeftPx + 'px';
     } else {
       styleMap.style.width = oldWidth;
       styleMap.style.left = oldLeft;
@@ -103,25 +109,25 @@ export default function ChartTimelineItemsRowItem(vido, props) {
     if (currentRowItemsStyle) styleMap.setStyle({ ...styleMap.style, ...currentRowItemsStyle });
     const currentStyle = props?.item?.style;
     if (currentStyle) styleMap.setStyle({ ...styleMap.style, ...currentStyle });
-    actionProps.left = itemLeftPx + xCompensation;
+    actionProps.left = itemLeftPx;
     actionProps.width = itemWidthPx;
     update();
   }
 
   const componentName = 'chart-timeline-items-row-item';
   const cutterName = api.getClass(componentName) + '-cut';
-  const cutterLeft = html`
+  const cutterLeft = () => html`
     <div class=${cutterName} style=${leftCutStyleMap}>
-      <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 18 16" width="16">
+      ${svg`<svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 18 16" width="16">
         <path fill-opacity="0.5" fill="#ffffff" d="m5,3l-5,5l5,5l0,-10z" />
-      </svg>
+      </svg>`}
     </div>
   `;
-  const cutterRight = html`
+  const cutterRight = () => html`
     <div class=${cutterName} style=${rightCutStyleMap}>
-      <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 4 16" width="16">
+      ${svg`<svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 4 16" width="16">
         <path transform="rotate(-180 2.5,8) " fill-opacity="0.5" fill="#ffffff" d="m5,3l-5,5l5,5l0,-10z" />
-      </svg>
+      </svg>`}
     </div>
   `;
   function onPropsChange(changedProps, options) {
@@ -150,7 +156,7 @@ export default function ChartTimelineItemsRowItem(vido, props) {
     })
   );
 
-  onDestroy(state.subscribeAll(['_internal.chart.time', 'config.scroll.compensation.x'], updateItem));
+  onDestroy(state.subscribe('_internal.chart.time', updateItem));
 
   componentActions.push(BindElementAction);
   const actions = Actions.create(componentActions, actionProps);
@@ -160,11 +166,11 @@ export default function ChartTimelineItemsRowItem(vido, props) {
     return wrapper(
       html`
         <div detach=${detach} class=${className} data-actions=${actions} style=${styleMap}>
-          ${cutLeft ? cutterLeft : ''}
-          <div class=${labelClassName}>
+          ${cutterLeft()}
+          <div class=${labelClassName} title=${props.item.isHtml ? null : props.item.label}>
             ${props.item.isHtml ? unsafeHTML(props.item.label) : props.item.label}
           </div>
-          ${cutRight ? cutterRight : ''}
+          ${cutterRight()}
         </div>
       `,
       { vido, props, templateProps }

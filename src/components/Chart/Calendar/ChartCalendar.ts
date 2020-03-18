@@ -38,13 +38,6 @@ export default function ChartCalendar(vido, props) {
     })
   );
 
-  onDestroy(
-    state.subscribe('config.scroll.compensation.x', compensation => {
-      styleMap.style['margin-left'] = -compensation + 'px';
-      update();
-    })
-  );
-
   const components = [[], []];
   onDestroy(
     state.subscribe(`_internal.chart.time.levels`, levels => {

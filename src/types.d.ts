@@ -1,11 +1,11 @@
-import Vido, { lithtml, vido } from '@neuronet.io/vido';
-import { Dayjs } from 'dayjs/index.d';
-import dayjs = require('dayjs/index.d');
+import { lithtml } from '@neuronet.io/vido';
+import { Dayjs, OpUnitType } from 'dayjs/index.d';
 
 export interface Row {
   id: string;
   parentId?: string;
   expanded?: boolean;
+  height?: number;
 }
 
 export interface Rows {
@@ -113,80 +113,153 @@ export interface ScrollPercent {
   top?: number;
   left?: number;
 }
-export interface ScrollCompensation {
-  x: number;
-  y: number;
-}
-export interface Scroll {
-  propagate?: boolean;
-  smooth?: boolean;
-  top?: number;
-  left?: number;
-  xMultiplier?: number;
-  yMultiplier?: number;
-  percent: ScrollPercent;
-  compensation: ScrollCompensation;
+
+export interface ScrollType {
+  size?: number;
+  minInnerSize?: number;
+  item?: Row | ChartTimeDate;
+  posPx?: number;
+  maxPosPx?: number;
+  area?: number;
 }
 
-export interface ChartTimeDate {}
+export interface ScrollTypeHorizontal extends ScrollType {
+  item?: ChartTimeDate;
+}
+
+export interface ScrollTypeVertical extends ScrollType {
+  item?: Row;
+}
+
+export interface Scroll {
+  horizontal?: ScrollTypeHorizontal;
+  vertical?: ScrollTypeVertical;
+}
+
+export interface ChartTimeDate extends ChartInternalTimeLevelDate {}
+
 export type ChartTimeDates = ChartTimeDate[];
+
+export type ChartTimeOnLevelDates = (
+  dates: ChartInternalTimeLevel,
+  formatting: ChartCalendarFormat,
+  time: ChartInternalTime,
+  level: ChartCalendarLevel,
+  levelIndex: number
+) => ChartInternalTimeLevel;
+
+export type ChartTimeOnLevelDate = (
+  date: ChartInternalTimeLevelDate,
+  period: Period,
+  level: ChartCalendarLevel,
+  levelIndex: number
+) => ChartInternalTimeLevelDate;
+
+export type ChartTimeOnAllLevelDates = (
+  allDates: ChartTimeDates[],
+  time: ChartInternalTime
+) => ChartInternalTimeLevel[];
+
 export interface ChartTime {
   period?: Period;
   from?: number;
+  readonly fromDate?: Dayjs;
   to?: number;
+  readonly toDate?: Dayjs;
   finalFrom?: number;
+  readonly finalFromDate?: Dayjs;
   finalTo?: number;
+  readonly finalToDate?: Dayjs;
   zoom?: number;
-  leftGlobal?: number;
+  leftGlobal: number;
+  readonly leftGlobalDate?: Dayjs;
   centerGlobal?: number;
+  readonly centerGlobalDate?: Dayjs;
   rightGlobal?: number;
+  readonly rightGlobalDate?: Dayjs;
   format?: ChartCalendarFormat;
   levels?: ChartTimeDates[];
   additionalSpaces?: ChartCalendarAdditionalSpaces;
   calculatedZoomMode?: boolean;
+  onLevelDate?: ChartTimeOnLevelDate[];
+  onLevelDates?: ChartTimeOnLevelDates[];
+  onAllLevelDates?: ChartTimeOnAllLevelDates[];
+  onCurrentViewLevelDates?: ChartTimeOnLevelDates[];
+  readonly allDates?: ChartTimeDates[];
+  forceUpdate?: boolean;
 }
+
+export interface ChartInternalTimeLevelDateCurrentView {
+  leftPx: number;
+  rightPx: number;
+  width: number;
+}
+
 export interface ChartInternalTimeLevelDate {
-  sub: number;
-  subPx: number;
   leftGlobal: number;
+  leftGlobalDate: Dayjs;
   rightGlobal: number;
+  rightGlobalDate: Dayjs;
   width: number;
   leftPx: number;
   rightPx: number;
   period: Period;
+  formatted: string;
+  current: boolean;
+  next: boolean;
+  previous: boolean;
+  currentView?: ChartInternalTimeLevelDateCurrentView;
+  leftPercent?: number;
+  rightPercent?: number;
 }
 export type ChartInternalTimeLevel = ChartInternalTimeLevelDate[];
 export interface ChartInternalTime {
-  period: Period | dayjs.OpUnitType;
+  period: Period;
   leftGlobal: number;
+  leftGlobalDate: Dayjs;
   centerGlobal: number;
+  centerGlobalDate: Dayjs;
   rightGlobal: number;
+  rightGlobalDate: Dayjs;
   timePerPixel: number;
   from: number;
+  fromDate: Dayjs;
   to: number;
+  toDate: Dayjs;
   finalFrom: number;
+  finalFromDate: Dayjs;
   finalTo: number;
+  finalToDate: Dayjs;
   totalViewDurationMs: number;
   totalViewDurationPx: number;
   leftInner: number;
   rightInner: number;
   leftPx: number;
   rightPx: number;
+  width?: number;
   zoom: number;
   format: ChartCalendarFormat;
   level: number;
   levels: ChartInternalTimeLevel[];
   additionalSpaces?: ChartCalendarAdditionalSpaces;
   calculatedZoomMode?: boolean;
+  onLevelDate?: ChartTimeOnLevelDate[];
+  onLevelDates?: ChartTimeOnLevelDates[];
+  onAllLevelDates?: ChartTimeOnAllLevelDates[];
+  onCurrentViewLevelDates?: ChartTimeOnLevelDates[];
+  allDates?: ChartTimeDates[];
+  forceUpdate?: boolean;
 }
 export interface ChartCalendarFormatArguments {
   timeStart: Dayjs;
   timeEnd: Dayjs;
   className: string;
   props: any;
-  vido: vido;
+  vido: any;
 }
-export type Period = 'year' | 'month' | 'week' | 'day' | 'hour';
+export type PeriodString = 'year' | 'month' | 'week' | 'day' | 'hour';
+export type Period = PeriodString | OpUnitType;
+
 export interface ChartCalendarFormat {
   zoomTo: number;
   period: Period;
@@ -282,7 +355,7 @@ export interface Locale {
 export interface Config {
   plugins?: Plugin[];
   plugin?: unknown;
-  height?: number;
+  innerHeight?: number;
   headerHeight?: number;
   components?: Components;
   wrappers?: Wrappers;
