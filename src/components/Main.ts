@@ -135,11 +135,14 @@ export default function Main(vido, props = {}) {
     }
     api.prepareItems(items);
     const treeMap = api.makeTreeMap(rows, items);
-    state.update('_internal.treeMap', treeMap);
     const flatTreeMapById = api.getFlatTreeMapById(treeMap);
-    state.update('_internal.flatTreeMapById', flatTreeMapById);
     const flatTreeMap = api.flattenTreeMap(treeMap);
-    state.update('_internal.flatTreeMap', flatTreeMap);
+    state.update('_internal', _internal => {
+      _internal.treeMap = treeMap;
+      _internal.flatTreeMapById = flatTreeMapById;
+      _internal.flatTreeMap = flatTreeMap;
+      return _internal;
+    });
     update();
   }
 
