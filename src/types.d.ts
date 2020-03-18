@@ -124,11 +124,11 @@ export interface ScrollType {
 }
 
 export interface ScrollTypeHorizontal extends ScrollType {
-  item?: ChartTimeDate;
+  data?: ChartTimeDate;
 }
 
 export interface ScrollTypeVertical extends ScrollType {
-  item?: Row;
+  data?: Row;
 }
 
 export interface Scroll {

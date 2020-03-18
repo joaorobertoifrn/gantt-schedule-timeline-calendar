@@ -72,22 +72,22 @@ export default function ScrollBar(vido, props) {
     }
     const date: ChartInternalTimeLevelDate = allDates[currentItem];
     const horizontal: ScrollTypeHorizontal = state.get('config.scroll.horizontal');
-    if (horizontal.item && horizontal.item.leftGlobal === date.leftGlobal) return;
+    if (horizontal.data && horizontal.data.leftGlobal === date.leftGlobal) return;
     state.update('config.scroll.horizontal', (scrollHorizontal: ScrollTypeHorizontal) => {
-      scrollHorizontal.item = date;
+      scrollHorizontal.data = date;
       scrollHorizontal.posPx = pos;
       return scrollHorizontal;
     });
   }
 
-  function setScrollTop(currentItem: number | undefined, pos: number) {
-    if (currentItem === undefined) {
-      currentItem = 0;
+  function setScrollTop(currentData: number | undefined, pos: number) {
+    if (currentData === undefined) {
+      currentData = 0;
     }
     const vertical: ScrollTypeVertical = state.get('config.scroll.vertical');
-    if (vertical.item && vertical.item.id === rows[currentItem].id) return;
+    if (vertical.data && vertical.data.id === rows[currentData].id) return;
     state.update('config.scroll.vertical', (scrollVertical: ScrollTypeVertical) => {
-      scrollVertical.item = rows[currentItem];
+      scrollVertical.data = rows[currentData];
       scrollVertical.posPx = pos;
       return scrollVertical;
     });

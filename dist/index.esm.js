@@ -5888,8 +5888,11 @@ function Main(vido, props = {}) {
         const configRows = state.get('config.list.rows');
         const rowsWithParentsExpanded = api.getRowsFromIds(api.getRowsWithParentsExpanded(state.get('_internal.flatTreeMap'), state.get('_internal.flatTreeMapById'), configRows), configRows);
         rowsHeight = api.getRowsHeight(rowsWithParentsExpanded);
-        state.update('_internal.list.rowsHeight', rowsHeight);
-        state.update('_internal.list.rowsWithParentsExpanded', rowsWithParentsExpanded);
+        state.update('_internal.list', list => {
+            list.rowsHeight = rowsHeight;
+            list.rowsWithParentsExpanded = rowsWithParentsExpanded;
+            return list;
+        });
         update();
     }
     onDestroy(state.subscribeAll(['config.list.rows.*.expanded', '_internal.treeMap;', 'config.list.rows.*.height'], prepareExpanded, { bulk: true }));
@@ -5942,7 +5945,7 @@ function Main(vido, props = {}) {
         state.update('_internal.chart.visibleItems', visibleItems);
         update();
     }
-    onDestroy(state.subscribeAll(['_internal.list.rowsWithParentsExpanded;', 'config.scroll.vertical.item', 'config.chart.items'], generateVisibleRowsAndItems, { bulk: true }));
+    onDestroy(state.subscribeAll(['_internal.list.rowsWithParentsExpanded;', 'config.scroll.vertical.data', 'config.chart.items'], generateVisibleRowsAndItems, { bulk: true }));
     function getLastPageDatesWidth(chartWidth, allDates) {
         if (allDates.length === 0)
             return 0;
@@ -6259,11 +6262,11 @@ function Main(vido, props = {}) {
                     if (!date) {
                         date = allMainDates[0];
                     }
-                    horizontalScroll.item = date;
+                    horizontalScroll.data = date;
                 }
             }
             else {
-                let date = horizontalScroll.item;
+                let date = horizontalScroll.data;
                 if (!date) {
                     date = allMainDates[0];
                 }
@@ -6324,7 +6327,7 @@ function Main(vido, props = {}) {
     };
     function recalculationIsNeeded() {
         const configTime = state.get('config.chart.time');
-        const scrollItem = state.get('config.scroll.horizontal.item');
+        const scrollItem = state.get('config.scroll.horizontal.data');
         const chartWidth = state.get('_internal.chart.dimensions.width');
         const cache = Object.assign({}, recalculationTriggerCache);
         recalculationTriggerCache.zoom = configTime.zoom;
@@ -6365,7 +6368,7 @@ function Main(vido, props = {}) {
     onDestroy(state.subscribeAll([
         'config.chart.time',
         'config.chart.calendar.levels',
-        'config.scroll.horizontal.item',
+        'config.scroll.horizontal.data',
         '_internal.chart.dimensions.width'
     ], () => {
         let reason = recalculationIsNeeded();
@@ -6516,23 +6519,23 @@ function ScrollBar(vido, props) {
         }
         const date = allDates[currentItem];
         const horizontal = state.get('config.scroll.horizontal');
-        if (horizontal.item && horizontal.item.leftGlobal === date.leftGlobal)
+        if (horizontal.data && horizontal.data.leftGlobal === date.leftGlobal)
             return;
         state.update('config.scroll.horizontal', (scrollHorizontal) => {
-            scrollHorizontal.item = date;
+            scrollHorizontal.data = date;
             scrollHorizontal.posPx = pos;
             return scrollHorizontal;
         });
     }
-    function setScrollTop(currentItem, pos) {
-        if (currentItem === undefined) {
-            currentItem = 0;
+    function setScrollTop(currentData, pos) {
+        if (currentData === undefined) {
+            currentData = 0;
         }
         const vertical = state.get('config.scroll.vertical');
-        if (vertical.item && vertical.item.id === rows[currentItem].id)
+        if (vertical.data && vertical.data.id === rows[currentData].id)
             return;
         state.update('config.scroll.vertical', (scrollVertical) => {
-            scrollVertical.item = rows[currentItem];
+            scrollVertical.data = rows[currentData];
             scrollVertical.posPx = pos;
             return scrollVertical;
         });
@@ -10262,7 +10265,7 @@ function getInternalApi(state) {
             if (rowsWithParentsExpanded.length === 0)
                 return [];
             const visibleRows = [];
-            let topRow = state.get('config.scroll.vertical.item');
+            let topRow = state.get('config.scroll.vertical.data');
             if (!topRow)
                 topRow = rowsWithParentsExpanded[0];
             const innerHeight = state.get('_internal.innerHeight');
@@ -10388,8 +10391,8 @@ function getInternalApi(state) {
                     const halfChartTime = (chartWidth / 2) * time.timePerPixel;
                     leftGlobal = toTime - halfChartTime;
                 }
-                scrollHorizontal.item = this.time.findDateAtTime(leftGlobal, time.allDates[time.level]);
-                scrollHorizontal.posPx = this.time.calculateScrollPosPxFromTime(scrollHorizontal.item.leftGlobal, time, scrollHorizontal);
+                scrollHorizontal.data = this.time.findDateAtTime(leftGlobal, time.allDates[time.level]);
+                scrollHorizontal.posPx = this.time.calculateScrollPosPxFromTime(scrollHorizontal.data.leftGlobal, time, scrollHorizontal);
                 return scrollHorizontal;
             });
         },

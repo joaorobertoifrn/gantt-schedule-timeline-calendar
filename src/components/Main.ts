@@ -162,8 +162,11 @@ export default function Main(vido, props = {}) {
       configRows
     );
     rowsHeight = api.getRowsHeight(rowsWithParentsExpanded);
-    state.update('_internal.list.rowsHeight', rowsHeight);
-    state.update('_internal.list.rowsWithParentsExpanded', rowsWithParentsExpanded);
+    state.update('_internal.list', list => {
+      list.rowsHeight = rowsHeight;
+      list.rowsWithParentsExpanded = rowsWithParentsExpanded;
+      return list;
+    });
     update();
   }
   onDestroy(
@@ -229,7 +232,7 @@ export default function Main(vido, props = {}) {
   }
   onDestroy(
     state.subscribeAll(
-      ['_internal.list.rowsWithParentsExpanded;', 'config.scroll.vertical.item', 'config.chart.items'],
+      ['_internal.list.rowsWithParentsExpanded;', 'config.scroll.vertical.data', 'config.chart.items'],
       generateVisibleRowsAndItems,
       { bulk: true }
     )
@@ -580,10 +583,10 @@ export default function Main(vido, props = {}) {
           if (!date) {
             date = allMainDates[0];
           }
-          horizontalScroll.item = date;
+          horizontalScroll.data = date;
         }
       } else {
-        let date = horizontalScroll.item;
+        let date = horizontalScroll.data;
         if (!date) {
           date = allMainDates[0];
         }
@@ -649,7 +652,7 @@ export default function Main(vido, props = {}) {
   };
   function recalculationIsNeeded() {
     const configTime = state.get('config.chart.time');
-    const scrollItem = state.get('config.scroll.horizontal.item');
+    const scrollItem = state.get('config.scroll.horizontal.data');
     const chartWidth = state.get('_internal.chart.dimensions.width');
     const cache = { ...recalculationTriggerCache };
     recalculationTriggerCache.zoom = configTime.zoom;
@@ -688,7 +691,7 @@ export default function Main(vido, props = {}) {
       [
         'config.chart.time',
         'config.chart.calendar.levels',
-        'config.scroll.horizontal.item',
+        'config.scroll.horizontal.data',
         '_internal.chart.dimensions.width'
       ],
       () => {

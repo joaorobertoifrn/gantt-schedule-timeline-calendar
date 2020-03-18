@@ -253,7 +253,7 @@ export function getInternalApi(state) {
     getVisibleRows(rowsWithParentsExpanded) {
       if (rowsWithParentsExpanded.length === 0) return [];
       const visibleRows = [];
-      let topRow = state.get('config.scroll.vertical.item');
+      let topRow = state.get('config.scroll.vertical.data');
       if (!topRow) topRow = rowsWithParentsExpanded[0];
       const innerHeight = state.get('_internal.innerHeight');
       let strictTopRow = rowsWithParentsExpanded.find(row => row.id === topRow.id);
@@ -380,9 +380,9 @@ export function getInternalApi(state) {
           const halfChartTime = (chartWidth / 2) * time.timePerPixel;
           leftGlobal = toTime - halfChartTime;
         }
-        scrollHorizontal.item = this.time.findDateAtTime(leftGlobal, time.allDates[time.level]);
+        scrollHorizontal.data = this.time.findDateAtTime(leftGlobal, time.allDates[time.level]);
         scrollHorizontal.posPx = this.time.calculateScrollPosPxFromTime(
-          scrollHorizontal.item.leftGlobal,
+          scrollHorizontal.data.leftGlobal,
           time,
           scrollHorizontal
         );
