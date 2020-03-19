@@ -5909,9 +5909,12 @@
 	        for (let i = rowsWithParentsExpanded.length - 1; i >= 0; i--) {
 	            const row = rowsWithParentsExpanded[i];
 	            currentHeight += row.height;
-	            if (currentHeight >= innerHeight)
-	                return currentHeight - row.height;
+	            if (currentHeight >= innerHeight) {
+	                currentHeight = currentHeight - row.height;
+	                break;
+	            }
 	        }
+	        state.update('config.scroll.vertical.lastPageSize', currentHeight);
 	        return currentHeight;
 	    }
 	    onDestroy(state.subscribeAll(['_internal.list.rowsWithParentsExpanded;', '_internal.innerHeight', '_internal.list.rowsHeight'], () => {
@@ -5959,9 +5962,12 @@
 	        for (let i = allDates.length - 1; i >= 0; i--) {
 	            const date = allDates[i];
 	            currentWidth += date.width;
-	            if (currentWidth >= chartWidth)
-	                return currentWidth - date.width;
+	            if (currentWidth >= chartWidth) {
+	                currentWidth = currentWidth - date.width;
+	                break;
+	            }
 	        }
+	        state.update('config.scroll.horizontal.lastPageSize', currentWidth);
 	        return currentWidth;
 	    }
 	    const generatePeriodDates = (formatting, time, level, levelIndex) => {
@@ -6495,13 +6501,13 @@
 	    const offsetProp = props.type === 'horizontal' ? 'left' : 'top';
 	    const styleMapOuter = new StyleMap({});
 	    const styleMapInner = new StyleMap({});
-	    let pos = 0;
 	    let maxPos = 0;
 	    let itemsCount = 0;
 	    let allDates = [];
 	    let rows = [];
 	    let rowsOffsets = [];
 	    let rowsPercents = [];
+	    let itemWidth = 0;
 	    function generateRowsOffsets() {
 	        const len = rows.length;
 	        rowsOffsets = [];
@@ -6519,17 +6525,30 @@
 	            rowsPercents.push(offsetTop / verticalHeight);
 	        }
 	    }
-	    function setScrollLeft(currentItem, pos) {
-	        if (currentItem === undefined) {
-	            currentItem = 0;
+	    function getFullSize() {
+	        let fullSize = 0;
+	        if (props.type === 'vertical') {
+	            if (rowsOffsets.length) {
+	                return rowsOffsets[rowsOffsets.length - 1] + rows[rows.length - 1].height;
+	            }
+	            return fullSize;
 	        }
-	        const date = allDates[currentItem];
+	        if (allDates.length) {
+	            return allDates[allDates.length - 1].rightPx;
+	        }
+	        return fullSize;
+	    }
+	    function setScrollLeft(currentData, pos) {
+	        if (currentData === undefined) {
+	            currentData = 0;
+	        }
+	        const date = allDates[currentData];
 	        const horizontal = state.get('config.scroll.horizontal');
 	        if (horizontal.data && horizontal.data.leftGlobal === date.leftGlobal)
 	            return;
 	        state.update('config.scroll.horizontal', (scrollHorizontal) => {
 	            scrollHorizontal.data = date;
-	            scrollHorizontal.posPx = pos;
+	            scrollHorizontal.posPx = currentData * itemWidth;
 	            return scrollHorizontal;
 	        });
 	    }
@@ -6542,15 +6561,21 @@
 	            return;
 	        state.update('config.scroll.vertical', (scrollVertical) => {
 	            scrollVertical.data = rows[currentData];
-	            scrollVertical.posPx = pos;
+	            scrollVertical.posPx = currentData * itemWidth;
 	            return scrollVertical;
 	        });
 	    }
 	    let working = false;
 	    onDestroy(state.subscribeAll(props.type === 'horizontal'
-	        ? [`config.scroll.${props.type}.size`, '_internal.chart.dimensions.width', '_internal.chart.time']
+	        ? [
+	            `config.scroll.${props.type}.size`,
+	            //`config.scroll.${props.type}.lastPageSize`,
+	            '_internal.chart.dimensions.width',
+	            '_internal.chart.time'
+	        ]
 	        : [
 	            `config.scroll.${props.type}.size`,
+	            //`config.scroll.${props.type}.lastPageSize`,
 	            '_internal.innerHeight',
 	            '_internal.list.rowsWithParentsExpanded',
 	            `config.scroll.${props.type}.area`
@@ -6579,6 +6604,7 @@
 	            styleMapOuter.style.top = state.get('config.headerHeight') + 'px';
 	        }
 	        styleMapInner.style[sizeProp] = '100%';
+	        let invSizeInner = invSize;
 	        let innerSize = 0;
 	        if (props.type === 'horizontal') {
 	            if (time.allDates && time.allDates[time.level]) {
@@ -6605,19 +6631,32 @@
 	                rowsOffsets = [];
 	            }
 	        }
-	        innerSize = invSize / itemsCount;
-	        if (innerSize < scroll.minInnerSize) {
-	            innerSize = scroll.minInnerSize;
+	        const fullSize = getFullSize();
+	        if (fullSize <= invSizeInner || scroll.lastPageSize === fullSize) {
+	            invSizeInner = 0;
+	            innerSize = 0;
+	        }
+	        else {
+	            if (scroll.lastPageSize && fullSize) {
+	                innerSize = (scroll.lastPageSize / fullSize) * invSize;
+	            }
+	            else {
+	                innerSize = 0;
+	                invSizeInner = 0;
+	            }
+	            if (innerSize < scroll.minInnerSize) {
+	                innerSize = scroll.minInnerSize;
+	            }
 	        }
 	        styleMapInner.style[invSizeProp] = innerSize + 'px';
-	        maxPos = invSize - innerSize;
+	        maxPos = invSize;
+	        itemWidth = maxPos / itemsCount;
 	        state.update(`config.scroll.${props.type}.maxPosPx`, maxPos);
 	        update();
 	        working = false;
 	    }));
 	    onDestroy(state.subscribe(`config.scroll.${props.type}.posPx`, position => {
 	        styleMapInner.style[offsetProp] = position + 'px';
-	        pos = position;
 	        update();
 	    }));
 	    class OuterAction extends Action$1 {
@@ -6678,9 +6717,8 @@
 	            if (this.moving) {
 	                ev.preventDefault();
 	                ev.stopPropagation();
-	                this.currentPos = props.type === 'horizontal' ? ev.screenX : ev.screenY;
-	                pos = this.limitPosition(pos + ev[movement]);
-	                const percent = pos / maxPos;
+	                this.currentPos = this.limitPosition(this.currentPos + ev[movement]);
+	                const percent = this.currentPos / maxPos;
 	                let currentItem;
 	                if (props.type === 'horizontal') {
 	                    const date = allDates.find(date => date.leftPercent >= percent);
@@ -6698,10 +6736,10 @@
 	                if (!currentItem)
 	                    currentItem = 0;
 	                if (props.type === 'horizontal') {
-	                    setScrollLeft(currentItem, pos);
+	                    setScrollLeft(currentItem, this.currentPos);
 	                }
 	                else {
-	                    setScrollTop(currentItem, pos);
+	                    setScrollTop(currentItem, this.currentPos);
 	                }
 	            }
 	        }
@@ -8723,7 +8761,7 @@
 	            horizontal: {
 	                size: 12,
 	                minInnerSize: 40,
-	                item: null,
+	                data: null,
 	                posPx: 0,
 	                maxPosPx: 0,
 	                area: 0
@@ -8731,7 +8769,7 @@
 	            vertical: {
 	                size: 10,
 	                minInnerSize: 40,
-	                item: null,
+	                data: null,
 	                posPx: 0,
 	                maxPosPx: 0,
 	                area: 0

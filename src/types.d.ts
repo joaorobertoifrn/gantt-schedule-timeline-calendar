@@ -117,10 +117,11 @@ export interface ScrollPercent {
 export interface ScrollType {
   size?: number;
   minInnerSize?: number;
-  item?: Row | ChartTimeDate;
+  data?: Row | ChartTimeDate;
   posPx?: number;
   maxPosPx?: number;
   area?: number;
+  lastPageSize?: number;
 }
 
 export interface ScrollTypeHorizontal extends ScrollType {

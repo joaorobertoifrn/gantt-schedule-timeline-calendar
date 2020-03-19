@@ -56,6 +56,7 @@
 }
 .gantt-schedule-timeline-calendar__list-toggle {
   position: fixed;
+  user-select: none;
   left: 0px;
   top: 0px;
   overflow: hidden;

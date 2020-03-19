@@ -202,7 +202,7 @@ function defaultConfig(): Config {
       horizontal: {
         size: 12,
         minInnerSize: 40,
-        item: null,
+        data: null,
         posPx: 0,
         maxPosPx: 0,
         area: 0
@@ -210,7 +210,7 @@ function defaultConfig(): Config {
       vertical: {
         size: 10,
         minInnerSize: 40,
-        item: null,
+        data: null,
         posPx: 0,
         maxPosPx: 0,
         area: 0

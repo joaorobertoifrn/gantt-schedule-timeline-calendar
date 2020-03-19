@@ -183,8 +183,12 @@ export default function Main(vido, props = {}) {
     for (let i = rowsWithParentsExpanded.length - 1; i >= 0; i--) {
       const row = rowsWithParentsExpanded[i];
       currentHeight += row.height;
-      if (currentHeight >= innerHeight) return currentHeight - row.height;
+      if (currentHeight >= innerHeight) {
+        currentHeight = currentHeight - row.height;
+        break;
+      }
     }
+    state.update('config.scroll.vertical.lastPageSize', currentHeight);
     return currentHeight;
   }
 
@@ -244,8 +248,12 @@ export default function Main(vido, props = {}) {
     for (let i = allDates.length - 1; i >= 0; i--) {
       const date = allDates[i];
       currentWidth += date.width;
-      if (currentWidth >= chartWidth) return currentWidth - date.width;
+      if (currentWidth >= chartWidth) {
+        currentWidth = currentWidth - date.width;
+        break;
+      }
     }
+    state.update('config.scroll.horizontal.lastPageSize', currentWidth);
     return currentWidth;
   }
 

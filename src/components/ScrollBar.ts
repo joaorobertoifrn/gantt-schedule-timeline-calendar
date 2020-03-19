@@ -9,14 +9,7 @@
  */
 
 import Action from '@neuronet.io/vido/Action';
-import {
-  ChartInternalTimeLevelDate,
-  ScrollType,
-  ChartTimeDate,
-  Row,
-  ScrollTypeHorizontal,
-  ScrollTypeVertical
-} from '../types';
+import { ChartInternalTimeLevelDate, ScrollTypeHorizontal, ScrollTypeVertical } from '../types';
 
 export default function ScrollBar(vido, props) {
   const { onDestroy, state, api, html, StyleMap, Actions, update, schedule } = vido;
@@ -41,13 +34,13 @@ export default function ScrollBar(vido, props) {
   const offsetProp = props.type === 'horizontal' ? 'left' : 'top';
   const styleMapOuter = new StyleMap({});
   const styleMapInner = new StyleMap({});
-  let pos = 0;
   let maxPos = 0;
   let itemsCount = 0;
   let allDates = [];
   let rows = [];
   let rowsOffsets = [];
   let rowsPercents = [];
+  let itemWidth = 0;
 
   function generateRowsOffsets() {
     const len = rows.length;
@@ -66,16 +59,30 @@ export default function ScrollBar(vido, props) {
     }
   }
 
-  function setScrollLeft(currentItem: number | undefined, pos: number) {
-    if (currentItem === undefined) {
-      currentItem = 0;
+  function getFullSize(): number {
+    let fullSize = 0;
+    if (props.type === 'vertical') {
+      if (rowsOffsets.length) {
+        return rowsOffsets[rowsOffsets.length - 1] + rows[rows.length - 1].height;
+      }
+      return fullSize;
     }
-    const date: ChartInternalTimeLevelDate = allDates[currentItem];
+    if (allDates.length) {
+      return allDates[allDates.length - 1].rightPx;
+    }
+    return fullSize;
+  }
+
+  function setScrollLeft(currentData: number | undefined, pos: number) {
+    if (currentData === undefined) {
+      currentData = 0;
+    }
+    const date: ChartInternalTimeLevelDate = allDates[currentData];
     const horizontal: ScrollTypeHorizontal = state.get('config.scroll.horizontal');
     if (horizontal.data && horizontal.data.leftGlobal === date.leftGlobal) return;
     state.update('config.scroll.horizontal', (scrollHorizontal: ScrollTypeHorizontal) => {
       scrollHorizontal.data = date;
-      scrollHorizontal.posPx = pos;
+      scrollHorizontal.posPx = currentData * itemWidth;
       return scrollHorizontal;
     });
   }
@@ -88,7 +95,7 @@ export default function ScrollBar(vido, props) {
     if (vertical.data && vertical.data.id === rows[currentData].id) return;
     state.update('config.scroll.vertical', (scrollVertical: ScrollTypeVertical) => {
       scrollVertical.data = rows[currentData];
-      scrollVertical.posPx = pos;
+      scrollVertical.posPx = currentData * itemWidth;
       return scrollVertical;
     });
   }
@@ -97,9 +104,15 @@ export default function ScrollBar(vido, props) {
   onDestroy(
     state.subscribeAll(
       props.type === 'horizontal'
-        ? [`config.scroll.${props.type}.size`, '_internal.chart.dimensions.width', '_internal.chart.time']
+        ? [
+            `config.scroll.${props.type}.size`,
+            //`config.scroll.${props.type}.lastPageSize`,
+            '_internal.chart.dimensions.width',
+            '_internal.chart.time'
+          ]
         : [
             `config.scroll.${props.type}.size`,
+            //`config.scroll.${props.type}.lastPageSize`,
             '_internal.innerHeight',
             '_internal.list.rowsWithParentsExpanded',
             `config.scroll.${props.type}.area`
@@ -126,6 +139,7 @@ export default function ScrollBar(vido, props) {
           styleMapOuter.style.top = state.get('config.headerHeight') + 'px';
         }
         styleMapInner.style[sizeProp] = '100%';
+        let invSizeInner = invSize;
         let innerSize = 0;
         if (props.type === 'horizontal') {
           if (time.allDates && time.allDates[time.level]) {
@@ -148,12 +162,26 @@ export default function ScrollBar(vido, props) {
             rowsOffsets = [];
           }
         }
-        innerSize = invSize / itemsCount;
-        if (innerSize < scroll.minInnerSize) {
-          innerSize = scroll.minInnerSize;
+
+        const fullSize = getFullSize();
+        if (fullSize <= invSizeInner || scroll.lastPageSize === fullSize) {
+          invSizeInner = 0;
+          innerSize = 0;
+        } else {
+          if (scroll.lastPageSize && fullSize) {
+            innerSize = (scroll.lastPageSize / fullSize) * invSize;
+          } else {
+            innerSize = 0;
+            invSizeInner = 0;
+          }
+          if (innerSize < scroll.minInnerSize) {
+            innerSize = scroll.minInnerSize;
+          }
         }
+
         styleMapInner.style[invSizeProp] = innerSize + 'px';
-        maxPos = invSize - innerSize;
+        maxPos = invSize;
+        itemWidth = maxPos / itemsCount;
         state.update(`config.scroll.${props.type}.maxPosPx`, maxPos);
         update();
         working = false;
@@ -164,7 +192,6 @@ export default function ScrollBar(vido, props) {
   onDestroy(
     state.subscribe(`config.scroll.${props.type}.posPx`, position => {
       styleMapInner.style[offsetProp] = position + 'px';
-      pos = position;
       update();
     })
   );
@@ -232,9 +259,8 @@ export default function ScrollBar(vido, props) {
       if (this.moving) {
         ev.preventDefault();
         ev.stopPropagation();
-        this.currentPos = props.type === 'horizontal' ? ev.screenX : ev.screenY;
-        pos = this.limitPosition(pos + ev[movement]);
-        const percent = pos / maxPos;
+        this.currentPos = this.limitPosition(this.currentPos + ev[movement]);
+        const percent = this.currentPos / maxPos;
         let currentItem;
         if (props.type === 'horizontal') {
           const date = allDates.find(date => date.leftPercent >= percent);
@@ -250,9 +276,9 @@ export default function ScrollBar(vido, props) {
         }
         if (!currentItem) currentItem = 0;
         if (props.type === 'horizontal') {
-          setScrollLeft(currentItem, pos);
+          setScrollLeft(currentItem, this.currentPos);
         } else {
-          setScrollTop(currentItem, pos);
+          setScrollTop(currentItem, this.currentPos);
         }
       }
     }

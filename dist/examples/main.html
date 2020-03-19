@@ -44,7 +44,7 @@
     <script src="../WeekendHighlight.plugin.js"></script>
     <script src="../index.umd.js?12345"></script>
     <script>
-      const iterations = 1000;
+      const iterations = 100;
 
       const pallete = [
         '#E74C3C',
@@ -195,7 +195,7 @@
 
       const element = document.getElementById('app');
       element.addEventListener('gstc-loaded', () => {
-        gstc.api.scrollToTime(new Date().getTime());
+        //gstc.api.scrollToTime(new Date().getTime());
       });
       const gstc = GSTC({
         element,
