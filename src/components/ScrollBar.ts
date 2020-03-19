@@ -73,7 +73,7 @@ export default function ScrollBar(vido, props) {
     return fullSize;
   }
 
-  function setScrollLeft(currentData: number | undefined, pos: number) {
+  function setScrollLeft(currentData: number | undefined) {
     if (currentData === undefined) {
       currentData = 0;
     }
@@ -87,7 +87,7 @@ export default function ScrollBar(vido, props) {
     });
   }
 
-  function setScrollTop(currentData: number | undefined, pos: number) {
+  function setScrollTop(currentData: number | undefined) {
     if (currentData === undefined) {
       currentData = 0;
     }
@@ -164,6 +164,7 @@ export default function ScrollBar(vido, props) {
         }
 
         const fullSize = getFullSize();
+        let sub = 0;
         if (fullSize <= invSizeInner || scroll.lastPageSize === fullSize) {
           invSizeInner = 0;
           innerSize = 0;
@@ -175,12 +176,13 @@ export default function ScrollBar(vido, props) {
             invSizeInner = 0;
           }
           if (innerSize < scroll.minInnerSize) {
+            sub = scroll.minInnerSize - innerSize;
             innerSize = scroll.minInnerSize;
           }
         }
 
         styleMapInner.style[invSizeProp] = innerSize + 'px';
-        maxPos = invSize;
+        maxPos = invSize - sub;
         itemWidth = maxPos / itemsCount;
         state.update(`config.scroll.${props.type}.maxPosPx`, maxPos);
         update();
@@ -276,9 +278,9 @@ export default function ScrollBar(vido, props) {
         }
         if (!currentItem) currentItem = 0;
         if (props.type === 'horizontal') {
-          setScrollLeft(currentItem, this.currentPos);
+          setScrollLeft(currentItem);
         } else {
-          setScrollTop(currentItem, this.currentPos);
+          setScrollTop(currentItem);
         }
       }
     }

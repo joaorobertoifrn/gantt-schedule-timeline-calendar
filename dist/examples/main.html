@@ -44,7 +44,7 @@
     <script src="../WeekendHighlight.plugin.js"></script>
     <script src="../index.umd.js?12345"></script>
     <script>
-      const iterations = 100;
+      const iterations = 10000;
 
       const pallete = [
         '#E74C3C',
@@ -153,18 +153,18 @@
       let selectionApi;
       const config = {
         plugins: [
-          ItemMovement({
-            moveable: true,
-            resizeable: true,
-            collisionDetection: true
-          }),
-          Selection({
-            selected(data, type) {
-              console.log(data, type);
-            }
-          }),
-          CalendarScroll(),
-          WeekendHighlight()
+          // ItemMovement({
+          //   moveable: true,
+          //   resizeable: true,
+          //   collisionDetection: true
+          // }),
+          // Selection({
+          //   selected(data, type) {
+          //     console.log(data, type);
+          //   }
+          // }),
+          //CalendarScroll(),
+          //WeekendHighlight()
         ],
         height: 623,
         list: {
@@ -174,7 +174,13 @@
         chart: {
           items,
           time: {
-            period: 'day'
+            additionalSpaces: {
+              hour: { before: 24, after: 24, period: 'hour' },
+              day: { before: 1, after: 1, period: 'month' },
+              week: { before: 1, after: 1, period: 'year' },
+              month: { before: 6, after: 6, period: 'year' },
+              year: { before: 12, after: 12, period: 'year' }
+            }
           }
         },
         classNames: {},
@@ -190,7 +196,7 @@
       });
 
       GSTCState.subscribe('_internal.chart.time.format.period', period => {
-        document.getElementById('period').innerText = period;
+        //document.getElementById('period').innerText = period;
       });
 
       const element = document.getElementById('app');
@@ -285,7 +291,7 @@
 
       function changePeriod() {
         const period = document.getElementById('setperiod').value;
-        const zoom = GSTC.api.setPeriod(period);
+        //const zoom = GSTC.api.setPeriod(period);
       }
 
       function destroy() {
