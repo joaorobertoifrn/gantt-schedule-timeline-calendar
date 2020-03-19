@@ -8471,7 +8471,7 @@ function ChartTimelineItemsRowItem(vido, props) {
     const { api, state, onDestroy, Detach, Actions, update, html, svg, onChange, unsafeHTML, StyleMap } = vido;
     let wrapper;
     onDestroy(state.subscribe('config.wrappers.ChartTimelineItemsRowItem', value => (wrapper = value)));
-    let itemLeftPx = 0, itemWidthPx = 0, leave = false;
+    let itemLeftPx = 0, itemWidthPx = 0, leave = false, classNameCurrent = '';
     const styleMap = new StyleMap({ width: '', height: '', left: '' }), leftCutStyleMap = new StyleMap({}), rightCutStyleMap = new StyleMap({}), actionProps = {
         item: props.item,
         row: props.row,
@@ -8491,19 +8491,21 @@ function ChartTimelineItemsRowItem(vido, props) {
         const itemRightPx = api.time.getOffsetPxFromDates(api.time.date(props.item.time.end), time.levels[time.level], time.period, time);
         itemWidthPx = itemRightPx - itemLeftPx;
         itemWidthPx -= state.get('config.chart.spacing') || 0;
+        if (itemWidthPx <= 0) {
+            shouldDetach = true;
+            return;
+        }
+        classNameCurrent = className;
         if (props.item.time.start < time.leftGlobal) {
-            const diff = (time.leftGlobal - props.item.time.start) / time.timePerPixel;
-            //leftCutStyleMap.style['margin-left'] = diff + 'px';
             leftCutStyleMap.style.display = 'block';
+            classNameCurrent += ' ' + className + '--left-cut';
         }
         else {
-            //leftCutStyleMap.style['margin-left'] = '0px';
             leftCutStyleMap.style.display = 'none';
         }
         if (props.item.time.end > time.rightGlobal) {
-            const diff = (props.item.time.end - time.rightGlobal) / time.timePerPixel;
-            //rightCutStyleMap.style['margin-right'] = diff + 'px';
             rightCutStyleMap.style.display = 'block';
+            classNameCurrent += ' ' + className + '--right-cut';
         }
         else {
             rightCutStyleMap.style.display = 'none';
@@ -8584,7 +8586,7 @@ function ChartTimelineItemsRowItem(vido, props) {
     const detach = new Detach(() => shouldDetach);
     return templateProps => {
         return wrapper(html `
-        <div detach=${detach} class=${className} data-actions=${actions} style=${styleMap}>
+        <div detach=${detach} class=${classNameCurrent} data-actions=${actions} style=${styleMap}>
           ${cutterLeft()}
           <div class=${labelClassName} title=${props.item.isHtml ? null : props.item.label}>
             ${props.item.isHtml ? unsafeHTML(props.item.label) : props.item.label}
@@ -8767,7 +8769,7 @@ function defaultConfig() {
         },
         scroll: {
             horizontal: {
-                size: 20,
+                size: 14,
                 minInnerSize: 40,
                 data: null,
                 posPx: 0,
@@ -8775,7 +8777,7 @@ function defaultConfig() {
                 area: 0
             },
             vertical: {
-                size: 20,
+                size: 14,
                 minInnerSize: 40,
                 data: null,
                 posPx: 0,

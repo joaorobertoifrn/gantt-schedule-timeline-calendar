@@ -200,7 +200,7 @@ function defaultConfig(): Config {
     },
     scroll: {
       horizontal: {
-        size: 20,
+        size: 14,
         minInnerSize: 40,
         data: null,
         posPx: 0,
@@ -208,7 +208,7 @@ function defaultConfig(): Config {
         area: 0
       },
       vertical: {
-        size: 20,
+        size: 14,
         minInnerSize: 40,
         data: null,
         posPx: 0,
