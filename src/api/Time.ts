@@ -93,10 +93,12 @@ export default class TimeApi {
             .endOf(period)
             .valueOf();
         }
+        time.fromDate = this.date(time.from);
+        time.toDate = this.date(time.to);
       }
     }
     time.finalFrom = time.fromDate.startOf(period).valueOf();
-    time.finalTo = time.toDate.startOf(period).valueOf(); // - this.getSkippedTime(time.to, time);
+    time.finalTo = time.toDate.startOf(period).valueOf();
     time = this.addAdditionalSpace(time);
     return time;
   }

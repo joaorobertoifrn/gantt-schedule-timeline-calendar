@@ -7570,13 +7570,25 @@
 	    }));
 	    let open = true;
 	    onDestroy(state.subscribe('config.list.columns.percent', percent => (percent === 0 ? (open = false) : (open = true))));
-	    function toggle(ev) {
+	    function toggle() {
 	        state.update('config.list.columns.percent', percent => {
 	            return percent === 0 ? 100 : 0;
 	        });
 	    }
+	    let down = false;
+	    function pointerDown() {
+	        down = true;
+	    }
+	    function pointerUp() {
+	        if (down) {
+	            down = false;
+	            toggle();
+	        }
+	    }
 	    return templateProps => wrapper(html `
-        <div class=${className} @click=${toggle}><img src=${open ? toggleIconsSrc.close : toggleIconsSrc.open} /></div>
+        <div class=${className} @pointerdown=${pointerDown} @pointerup=${pointerUp}>
+          <img src=${open ? toggleIconsSrc.close : toggleIconsSrc.open} />
+        </div>
       `, { props, vido, templateProps });
 	}
 
@@ -8761,7 +8773,7 @@
 	        },
 	        scroll: {
 	            horizontal: {
-	                size: 12,
+	                size: 20,
 	                minInnerSize: 40,
 	                data: null,
 	                posPx: 0,
@@ -8769,7 +8781,7 @@
 	                area: 0
 	            },
 	            vertical: {
-	                size: 10,
+	                size: 20,
 	                minInnerSize: 40,
 	                data: null,
 	                posPx: 0,
@@ -8784,7 +8796,7 @@
 	                to: 0,
 	                finalFrom: 0,
 	                finalTo: 0,
-	                zoom: 21,
+	                zoom: 20,
 	                leftGlobal: 0,
 	                centerGlobal: 0,
 	                rightGlobal: 0,
@@ -9105,10 +9117,12 @@
 	                        .endOf(period)
 	                        .valueOf();
 	                }
+	                time.fromDate = this.date(time.from);
+	                time.toDate = this.date(time.to);
 	            }
 	        }
 	        time.finalFrom = time.fromDate.startOf(period).valueOf();
-	        time.finalTo = time.toDate.startOf(period).valueOf(); // - this.getSkippedTime(time.to, time);
+	        time.finalTo = time.toDate.startOf(period).valueOf();
 	        time = this.addAdditionalSpace(time);
 	        return time;
 	    }

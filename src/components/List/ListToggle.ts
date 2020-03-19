@@ -38,16 +38,29 @@ export default function ListToggle(vido, props = {}) {
     state.subscribe('config.list.columns.percent', percent => (percent === 0 ? (open = false) : (open = true)))
   );
 
-  function toggle(ev) {
+  function toggle() {
     state.update('config.list.columns.percent', percent => {
       return percent === 0 ? 100 : 0;
     });
   }
 
+  let down = false;
+  function pointerDown() {
+    down = true;
+  }
+  function pointerUp() {
+    if (down) {
+      down = false;
+      toggle();
+    }
+  }
+
   return templateProps =>
     wrapper(
       html`
-        <div class=${className} @click=${toggle}><img src=${open ? toggleIconsSrc.close : toggleIconsSrc.open} /></div>
+        <div class=${className} @pointerdown=${pointerDown} @pointerup=${pointerUp}>
+          <img src=${open ? toggleIconsSrc.close : toggleIconsSrc.open} />
+        </div>
       `,
       { props, vido, templateProps }
     );
