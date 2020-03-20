@@ -28,7 +28,6 @@
   overflow: hidden;
   position: relative;
   border-radius: 10px;
-  background: rgba(0,0,0,0.02);
 }
 .gantt-schedule-timeline-calendar__scroll-bar--vertical {
   flex-shrink: 0;

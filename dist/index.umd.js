@@ -5906,6 +5906,7 @@
 	        if (rowsWithParentsExpanded.length === 0)
 	            return 0;
 	        let currentHeight = 0;
+	        let count = 0;
 	        for (let i = rowsWithParentsExpanded.length - 1; i >= 0; i--) {
 	            const row = rowsWithParentsExpanded[i];
 	            currentHeight += row.height;
@@ -5913,8 +5914,10 @@
 	                currentHeight = currentHeight - row.height;
 	                break;
 	            }
+	            count++;
 	        }
 	        state.update('config.scroll.vertical.lastPageSize', currentHeight);
+	        state.update('config.scroll.vertical.lastPageCount', count);
 	        return currentHeight;
 	    }
 	    onDestroy(state.subscribeAll(['_internal.list.rowsWithParentsExpanded;', '_internal.innerHeight', '_internal.list.rowsHeight'], () => {
@@ -5959,6 +5962,7 @@
 	        if (allDates.length === 0)
 	            return 0;
 	        let currentWidth = 0;
+	        let count = 0;
 	        for (let i = allDates.length - 1; i >= 0; i--) {
 	            const date = allDates[i];
 	            currentWidth += date.width;
@@ -5966,8 +5970,13 @@
 	                currentWidth = currentWidth - date.width;
 	                break;
 	            }
+	            count++;
 	        }
-	        state.update('config.scroll.horizontal.lastPageSize', currentWidth);
+	        state.update('config.scroll.horizontal', (horizontal) => {
+	            horizontal.lastPageSize = currentWidth;
+	            horizontal.lastPageCount = count;
+	            return horizontal;
+	        });
 	        return currentWidth;
 	    }
 	    const generatePeriodDates = (formatting, time, level, levelIndex) => {
@@ -6390,21 +6399,54 @@
 	    onDestroy(state.subscribe('config.chart.items.*.time', items => {
 	        recalculateTimes({ name: 'items' });
 	    }, { bulk: true }));
-	    if (state.get('config.usageStatistics') === true &&
-	        location.port === '' &&
-	        location.host !== '' &&
-	        !location.host.startsWith('localhost') &&
-	        !location.host.startsWith('127.') &&
-	        !location.host.startsWith('192.') &&
-	        !location.host.endsWith('.test') &&
-	        !location.host.endsWith('.local')) {
-	        try {
-	            const oReq = new XMLHttpRequest();
-	            oReq.open('POST', 'https://gstc-us.neuronet.io/');
-	            oReq.send(JSON.stringify({ location: { href: location.href, host: location.host } }));
+	    try {
+	        const ignoreHosts = [
+	            'stackblitz.io',
+	            'codepen.io',
+	            'cdpn.io',
+	            'codesandbox.io',
+	            'csb.app',
+	            'jsrun.pro',
+	            'jsrun.top',
+	            'jsfiddle.net',
+	            'jsbin.com'
+	        ];
+	        let loc = location.host;
+	        const locParts = loc.split('.');
+	        if (locParts.length > 2) {
+	            for (let i = 0, len = locParts.length - 2; i < len; i++) {
+	                locParts.shift();
+	            }
+	            loc = locParts.join('.');
 	        }
-	        catch (e) { }
+	        const startsWith = ['192.', '127.', 'test', 'demo', 'local'];
+	        const endsWith = ['test', 'local', 'demo'];
+	        function startsEnds() {
+	            for (let i = 0, len = startsWith.length; i < len; i++) {
+	                if (location.hostname.startsWith(startsWith[i]))
+	                    return true;
+	            }
+	            for (let i = 0, len = endsWith.length; i < len; i++) {
+	                if (location.hostname.endsWith(endsWith[i]))
+	                    return true;
+	            }
+	            return false;
+	        }
+	        function shouldSend() {
+	            return !ignoreHosts.includes(loc) && location.hostname !== 'localhost' && !startsEnds();
+	        }
+	        if (state.get('config.usageStatistics') === true && !localStorage.getItem('gstcus') && shouldSend()) {
+	            fetch('https://gstc-us.neuronet.io/', {
+	                method: 'POST',
+	                mode: 'cors',
+	                credentials: 'omit',
+	                redirect: 'follow',
+	                body: JSON.stringify({ location: { href: location.href, host: location.host } })
+	            }).catch(e => { });
+	            localStorage.setItem('gstcus', 'true');
+	        }
 	    }
+	    catch (e) { }
 	    const dimensions = { width: 0, height: 0 };
 	    let ro;
 	    /**
@@ -6497,7 +6539,6 @@
 	    let size;
 	    const sizeProp = props.type === 'horizontal' ? 'height' : 'width';
 	    const invSizeProp = sizeProp === 'height' ? 'width' : 'height';
-	    const movement = props.type === 'horizontal' ? 'movementX' : 'movementY';
 	    const offsetProp = props.type === 'horizontal' ? 'left' : 'top';
 	    const styleMapOuter = new StyleMap({});
 	    const styleMapInner = new StyleMap({});
@@ -6508,6 +6549,7 @@
 	    let rowsOffsets = [];
 	    let rowsPercents = [];
 	    let itemWidth = 0;
+	    let innerSize = 0, invSize = 0, invSizeInner = 0, sub = 0;
 	    function generateRowsOffsets() {
 	        const len = rows.length;
 	        rowsOffsets = [];
@@ -6538,48 +6580,51 @@
 	        }
 	        return fullSize;
 	    }
-	    function setScrollLeft(currentData) {
-	        if (currentData === undefined) {
-	            currentData = 0;
+	    function setScrollLeft(dataIndex) {
+	        if (dataIndex === undefined) {
+	            dataIndex = 0;
 	        }
-	        const date = allDates[currentData];
+	        const date = allDates[dataIndex];
 	        const horizontal = state.get('config.scroll.horizontal');
 	        if (horizontal.data && horizontal.data.leftGlobal === date.leftGlobal)
 	            return;
 	        state.update('config.scroll.horizontal', (scrollHorizontal) => {
 	            scrollHorizontal.data = date;
-	            scrollHorizontal.posPx = currentData * itemWidth;
+	            scrollHorizontal.posPx = Math.round(dataIndex * itemWidth);
+	            scrollHorizontal.dataIndex = dataIndex;
 	            return scrollHorizontal;
 	        });
 	    }
-	    function setScrollTop(currentData) {
-	        if (currentData === undefined) {
-	            currentData = 0;
+	    function setScrollTop(dataIndex) {
+	        if (dataIndex === undefined) {
+	            dataIndex = 0;
 	        }
 	        const vertical = state.get('config.scroll.vertical');
-	        if (vertical.data && vertical.data.id === rows[currentData].id)
+	        if (vertical.data && vertical.data.id === rows[dataIndex].id)
 	            return;
 	        state.update('config.scroll.vertical', (scrollVertical) => {
-	            scrollVertical.data = rows[currentData];
-	            scrollVertical.posPx = currentData * itemWidth;
+	            scrollVertical.data = rows[dataIndex];
+	            scrollVertical.posPx = dataIndex * itemWidth;
+	            scrollVertical.dataIndex = dataIndex;
 	            return scrollVertical;
 	        });
 	    }
+	    const cache = {
+	        maxPosPx: 0,
+	        innerSize: 0,
+	        sub: 0,
+	        scrollArea: 0
+	    };
+	    function shouldUpdate(maxPosPx, innerSize, sub, scrollArea) {
+	        return (cache.maxPosPx !== maxPosPx ||
+	            cache.innerSize !== innerSize ||
+	            cache.sub !== sub ||
+	            cache.scrollArea !== scrollArea);
+	    }
 	    let working = false;
 	    onDestroy(state.subscribeAll(props.type === 'horizontal'
-	        ? [
-	            `config.scroll.${props.type}.size`,
-	            //`config.scroll.${props.type}.lastPageSize`,
-	            '_internal.chart.dimensions.width',
-	            '_internal.chart.time'
-	        ]
-	        : [
-	            `config.scroll.${props.type}.size`,
-	            //`config.scroll.${props.type}.lastPageSize`,
-	            '_internal.innerHeight',
-	            '_internal.list.rowsWithParentsExpanded',
-	            `config.scroll.${props.type}.area`
-	        ], () => {
+	        ? [`config.scroll.${props.type}`, '_internal.chart.dimensions.width', '_internal.chart.time']
+	        : [`config.scroll.${props.type}`, '_internal.innerHeight', '_internal.list.rowsWithParentsExpanded'], () => {
 	        if (working)
 	            return;
 	        working = true;
@@ -6588,7 +6633,7 @@
 	        const chartWidth = state.get('_internal.chart.dimensions.width');
 	        const chartHeight = state.get('_internal.innerHeight');
 	        size = scroll.size;
-	        let invSize = props.type === 'horizontal' ? chartWidth : chartHeight;
+	        invSize = props.type === 'horizontal' ? chartWidth : chartHeight;
 	        invSize = invSize || 0;
 	        if (props.type === 'horizontal') {
 	            invSize -= size;
@@ -6604,8 +6649,7 @@
 	            styleMapOuter.style.top = state.get('config.headerHeight') + 'px';
 	        }
 	        styleMapInner.style[sizeProp] = '100%';
-	        let invSizeInner = invSize;
-	        let innerSize = 0;
+	        invSizeInner = invSize;
 	        if (props.type === 'horizontal') {
 	            if (time.allDates && time.allDates[time.level]) {
 	                allDates = time.allDates[time.level];
@@ -6632,14 +6676,14 @@
 	            }
 	        }
 	        const fullSize = getFullSize();
-	        let sub = 0;
+	        sub = 0;
 	        if (fullSize <= invSizeInner || scroll.lastPageSize === fullSize) {
 	            invSizeInner = 0;
 	            innerSize = 0;
 	        }
 	        else {
-	            if (scroll.lastPageSize && fullSize) {
-	                innerSize = (scroll.lastPageSize / fullSize) * invSize;
+	            if (invSize && fullSize) {
+	                innerSize = invSize * (invSize / fullSize);
 	            }
 	            else {
 	                innerSize = 0;
@@ -6651,9 +6695,21 @@
 	            }
 	        }
 	        styleMapInner.style[invSizeProp] = innerSize + 'px';
-	        maxPos = invSize - sub;
-	        itemWidth = maxPos / itemsCount;
-	        state.update(`config.scroll.${props.type}.maxPosPx`, maxPos);
+	        maxPos = Math.round(invSize - sub);
+	        itemWidth = (invSize - innerSize) / (itemsCount - scroll.lastPageCount);
+	        if (shouldUpdate(maxPos, innerSize, sub, invSize)) {
+	            cache.maxPosPx = maxPos;
+	            cache.innerSize = innerSize;
+	            cache.sub = sub;
+	            cache.scrollArea = invSize;
+	            state.update(`config.scroll.${props.type}`, (scroll) => {
+	                scroll.maxPosPx = maxPos;
+	                scroll.innerSize = innerSize;
+	                scroll.sub = sub;
+	                scroll.scrollArea = invSize;
+	                return scroll;
+	            });
+	        }
 	        update();
 	        working = false;
 	    }));
@@ -6675,26 +6731,37 @@
 	            this.moving = false;
 	            this.initialPos = 0;
 	            this.currentPos = 0;
+	            this.cumulation = 0;
+	            this.lastData = 0;
+	            this.dataIndex = 0;
 	            state.update(`_internal.elements.scroll-bar-inner--${props.type}`, element);
 	            this.pointerDown = this.pointerDown.bind(this);
 	            this.pointerUp = this.pointerUp.bind(this);
 	            const pointerMove = this.pointerMove.bind(this);
 	            this.pointerMove = schedule(ev => pointerMove(ev));
+	            this.unsub = state.subscribe(`config.scroll.${props.type}.dataIndex`, this.dataIndexChanged.bind(this));
 	            element.addEventListener('pointerdown', this.pointerDown);
-	            window.addEventListener('pointermove', this.pointerMove);
+	            window.addEventListener('pointermove', this.pointerMove, { passive: true });
 	            window.addEventListener('pointerup', this.pointerUp);
 	        }
 	        destroy(element) {
+	            this.unsub();
 	            element.removeEventListener('pointerdown', this.pointerDown);
 	            window.removeEventListener('pointermove', this.pointerMove);
 	            window.removeEventListener('pointerup', this.pointerUp);
 	        }
+	        dataIndexChanged(dataIndex) {
+	            if (dataIndex === this.dataIndex)
+	                return;
+	            if (props.type === 'horizontal' && allDates && allDates.length) {
+	                const date = allDates[dataIndex];
+	                const pos = Math.round(date.leftPercent * (invSize - sub));
+	                this.currentPos = pos;
+	                update();
+	            }
+	        }
 	        limitPosition(offset) {
-	            if (offset < 0)
-	                return 0;
-	            if (offset > maxPos)
-	                return maxPos;
-	            return offset;
+	            return Math.max(Math.min(offset, maxPos), 0);
 	        }
 	        pointerDown(ev) {
 	            ev.preventDefault();
@@ -6711,38 +6778,48 @@
 	                ev.stopPropagation();
 	            }
 	            this.moving = false;
+	            this.cumulation = 0;
 	            classNameInnerActive = '';
 	            classNameOuterActive = '';
 	            update();
 	        }
 	        pointerMove(ev) {
 	            if (this.moving) {
-	                ev.preventDefault();
 	                ev.stopPropagation();
-	                this.currentPos = this.limitPosition(this.currentPos + ev[movement]);
+	                const current = props.type === 'horizontal' ? ev.screenX : ev.screenY;
+	                const diff = current - this.initialPos;
+	                this.cumulation += diff;
+	                this.currentPos = this.limitPosition(this.currentPos + diff);
+	                this.initialPos = current;
 	                const percent = this.currentPos / maxPos;
-	                let currentItem;
+	                let dataIndex = 0;
 	                if (props.type === 'horizontal') {
-	                    const date = allDates.find(date => date.leftPercent >= percent);
-	                    currentItem = allDates.indexOf(date);
-	                }
-	                else {
-	                    for (let i = 0, len = rowsPercents.length; i < len; i++) {
-	                        const rowPercent = rowsPercents[i];
-	                        if (rowPercent >= percent) {
-	                            currentItem = i;
+	                    for (let len = allDates.length; dataIndex < len; dataIndex++) {
+	                        const date = allDates[dataIndex];
+	                        if (date.leftPercent >= percent)
 	                            break;
-	                        }
 	                    }
 	                }
-	                if (!currentItem)
-	                    currentItem = 0;
+	                else {
+	                    for (let len = rowsPercents.length; dataIndex < len; dataIndex++) {
+	                        const rowPercent = rowsPercents[dataIndex];
+	                        if (rowPercent >= percent)
+	                            break;
+	                    }
+	                }
+	                if (!dataIndex)
+	                    dataIndex = 0;
+	                this.dataIndex = dataIndex;
 	                if (props.type === 'horizontal') {
-	                    setScrollLeft(currentItem);
+	                    setScrollLeft(dataIndex);
 	                }
 	                else {
-	                    setScrollTop(currentItem);
+	                    setScrollTop(dataIndex);
 	                }
+	                if (dataIndex !== this.lastData) {
+	                    this.cumulation = 0;
+	                }
+	                this.lastData = dataIndex;
 	            }
 	        }
 	    }
@@ -10454,6 +10531,7 @@
 	                    leftGlobal = toTime - halfChartTime;
 	                }
 	                scrollHorizontal.data = this.time.findDateAtTime(leftGlobal, time.allDates[time.level]);
+	                scrollHorizontal.dataIndex = time.allDates[time.level].indexOf(scrollHorizontal.data);
 	                scrollHorizontal.posPx = this.time.calculateScrollPosPxFromTime(scrollHorizontal.data.leftGlobal, time, scrollHorizontal);
 	                return scrollHorizontal;
 	            });

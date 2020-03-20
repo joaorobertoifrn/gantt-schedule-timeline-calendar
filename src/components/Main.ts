@@ -23,7 +23,8 @@ import {
   ChartTimeDates,
   ChartCalendarFormat,
   Row,
-  ScrollTypeHorizontal
+  ScrollTypeHorizontal,
+  ScrollType
 } from '../types';
 
 export default function Main(vido, props = {}) {
@@ -180,6 +181,7 @@ export default function Main(vido, props = {}) {
   function getLastPageRowsHeight(innerHeight: number, rowsWithParentsExpanded: Row[]): number {
     if (rowsWithParentsExpanded.length === 0) return 0;
     let currentHeight = 0;
+    let count = 0;
     for (let i = rowsWithParentsExpanded.length - 1; i >= 0; i--) {
       const row = rowsWithParentsExpanded[i];
       currentHeight += row.height;
@@ -187,8 +189,10 @@ export default function Main(vido, props = {}) {
         currentHeight = currentHeight - row.height;
         break;
       }
+      count++;
     }
     state.update('config.scroll.vertical.lastPageSize', currentHeight);
+    state.update('config.scroll.vertical.lastPageCount', count);
     return currentHeight;
   }
 
@@ -245,6 +249,7 @@ export default function Main(vido, props = {}) {
   function getLastPageDatesWidth(chartWidth: number, allDates: ChartInternalTimeLevelDate[]): number {
     if (allDates.length === 0) return 0;
     let currentWidth = 0;
+    let count = 0;
     for (let i = allDates.length - 1; i >= 0; i--) {
       const date = allDates[i];
       currentWidth += date.width;
@@ -252,8 +257,13 @@ export default function Main(vido, props = {}) {
         currentWidth = currentWidth - date.width;
         break;
       }
+      count++;
     }
-    state.update('config.scroll.horizontal.lastPageSize', currentWidth);
+    state.update('config.scroll.horizontal', (horizontal: ScrollType) => {
+      horizontal.lastPageSize = currentWidth;
+      horizontal.lastPageCount = count;
+      return horizontal;
+    });
     return currentWidth;
   }
 
@@ -720,22 +730,51 @@ export default function Main(vido, props = {}) {
     )
   );
 
-  if (
-    state.get('config.usageStatistics') === true &&
-    location.port === '' &&
-    location.host !== '' &&
-    !location.host.startsWith('localhost') &&
-    !location.host.startsWith('127.') &&
-    !location.host.startsWith('192.') &&
-    !location.host.endsWith('.test') &&
-    !location.host.endsWith('.local')
-  ) {
-    try {
-      const oReq = new XMLHttpRequest();
-      oReq.open('POST', 'https://gstc-us.neuronet.io/');
-      oReq.send(JSON.stringify({ location: { href: location.href, host: location.host } }));
-    } catch (e) {}
-  }
+  try {
+    const ignoreHosts = [
+      'stackblitz.io',
+      'codepen.io',
+      'cdpn.io',
+      'codesandbox.io',
+      'csb.app',
+      'jsrun.pro',
+      'jsrun.top',
+      'jsfiddle.net',
+      'jsbin.com'
+    ];
+    let loc = location.host;
+    const locParts = loc.split('.');
+    if (locParts.length > 2) {
+      for (let i = 0, len = locParts.length - 2; i < len; i++) {
+        locParts.shift();
+      }
+      loc = locParts.join('.');
+    }
+    const startsWith = ['192.', '127.', 'test', 'demo', 'local'];
+    const endsWith = ['test', 'local', 'demo'];
+    function startsEnds() {
+      for (let i = 0, len = startsWith.length; i < len; i++) {
+        if (location.hostname.startsWith(startsWith[i])) return true;
+      }
+      for (let i = 0, len = endsWith.length; i < len; i++) {
+        if (location.hostname.endsWith(endsWith[i])) return true;
+      }
+      return false;
+    }
+    function shouldSend(): boolean {
+      return !ignoreHosts.includes(loc) && location.hostname !== 'localhost' && !startsEnds();
+    }
+    if (state.get('config.usageStatistics') === true && !localStorage.getItem('gstcus') && shouldSend()) {
+      fetch('https://gstc-us.neuronet.io/', {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        redirect: 'follow',
+        body: JSON.stringify({ location: { href: location.href, host: location.host } })
+      }).catch(e => {});
+      localStorage.setItem('gstcus', 'true');
+    }
+  } catch (e) {}
 
   const dimensions = { width: 0, height: 0 };
   let ro;

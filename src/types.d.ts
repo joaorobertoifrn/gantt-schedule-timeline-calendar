@@ -122,6 +122,11 @@ export interface ScrollType {
   maxPosPx?: number;
   area?: number;
   lastPageSize?: number;
+  lastPageCount?: number;
+  dataIndex?: number;
+  sub?: number;
+  scrollArea?: number;
+  innerSize?: number;
 }
 
 export interface ScrollTypeHorizontal extends ScrollType {

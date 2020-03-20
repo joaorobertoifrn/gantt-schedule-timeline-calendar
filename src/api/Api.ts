@@ -381,6 +381,7 @@ export function getInternalApi(state) {
           leftGlobal = toTime - halfChartTime;
         }
         scrollHorizontal.data = this.time.findDateAtTime(leftGlobal, time.allDates[time.level]);
+        scrollHorizontal.dataIndex = time.allDates[time.level].indexOf(scrollHorizontal.data);
         scrollHorizontal.posPx = this.time.calculateScrollPosPxFromTime(
           scrollHorizontal.data.leftGlobal,
           time,
