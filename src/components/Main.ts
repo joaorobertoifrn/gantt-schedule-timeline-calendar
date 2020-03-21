@@ -276,7 +276,7 @@ export default function Main(vido, props = {}) {
     const period = formatting.period;
     const dates = [];
     let finalFrom = time.finalFrom;
-    let leftDate = api.time.date(finalFrom);
+    let leftDate = api.time.date(finalFrom).startOf(period);
     const timePerPixel = time.timePerPixel;
     if (!timePerPixel) return [];
     let leftPx = 0;
@@ -311,16 +311,16 @@ export default function Main(vido, props = {}) {
         className,
         props: { date }
       });
-      time.onLevelDate.forEach(onLevelDate => {
-        date = onLevelDate(date, period, level, levelIndex);
-      });
+      for (let i = 0, len = time.onLevelDate.length; i < len; i++) {
+        date = time.onLevelDate[i](date, period, level, levelIndex);
+      }
       const diffMs = date.rightGlobalDate.diff(date.leftGlobalDate, 'millisecond');
       date.width = diffMs / timePerPixel;
       date.leftPx = leftPx;
       leftPx += date.width;
       date.rightPx = leftPx;
       dates.push(date);
-      leftDate = leftDate.add(1, period).startOf(period);
+      leftDate = leftDate.add(1, period); // startOf will cause here bug on summertime change - do not touch! :)
     }
     return dates;
   };
@@ -414,6 +414,9 @@ export default function Main(vido, props = {}) {
     if (filtered[0].period !== time.period && time.leftGlobal > filtered[0].leftGlobal) {
       firstLeftDiff = api.time.getDatesDiffPx(time.leftGlobal, filtered[0].leftGlobal, time.allDates[time.level]);
     }
+    if (filtered.length > 1000) {
+      throw new Error('Too much dates!');
+    }
     let leftPx = 0;
     return filtered.map(date => {
       date.currentView = {
@@ -469,11 +472,11 @@ export default function Main(vido, props = {}) {
     allMainDates: ChartInternalTimeLevelDate[]
   ): number {
     const date = api.time.findDateAtTime(leftGlobal, allMainDates);
-    const index = allMainDates.indexOf(date);
+    let index = allMainDates.indexOf(date);
     let rightGlobal = date.leftGlobal;
     let width = 0;
-    for (let i = index, len = allMainDates.length; i < len; i++) {
-      const currentDate = allMainDates[i];
+    for (let len = allMainDates.length; index < len; index++) {
+      const currentDate = allMainDates[index];
       rightGlobal = currentDate.leftGlobal;
       width += currentDate.width;
       if (width >= chartWidth) break;

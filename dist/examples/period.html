@@ -42,7 +42,7 @@
     <script src="../Selection.plugin.js"></script>
     <script src="../CalendarScroll.plugin.js"></script>
     <script src="../WeekendHighlight.plugin.js"></script>
-    <script src="../index.umd.js?12345"></script>
+    <script src="../index.umd.js"></script>
     <script>
       const iterations = 10000;
 
@@ -153,7 +153,7 @@
       let selectionApi;
       const config = {
         plugins: [
-          ItemMovement({
+          /*ItemMovement({
             moveable: true,
             resizable: true,
             collisionDetection: true
@@ -163,7 +163,7 @@
               console.log(data, type);
             }
           }),
-          CalendarScroll(),
+          CalendarScroll(),*/
           WeekendHighlight()
         ],
         height: 423,
@@ -174,32 +174,31 @@
         chart: {
           items,
           time: {
-            period: 'day',
-            additionalSpaces: {
+            period: 'day'
+            /*additionalSpaces: {
               hour: { before: 24, after: 24, period: 'hour' },
               day: { before: 1, after: 1, period: 'month' },
               week: { before: 1, after: 1, period: 'year' },
               month: { before: 6, after: 6, period: 'year' },
               year: { before: 12, after: 12, period: 'year' }
-            }
+            }*/
           }
-        },
-        classNames: {},
-        actions: {
-          'chart-timeline-items-row-item': [ResizingItemClass]
         }
+        /*actions: {
+          'chart-timeline-items-row-item': [ResizingItemClass]
+        }*/
       };
 
       let GSTCState = (window.state = GSTC.api.stateFromConfig(config));
-      GSTCState.subscribe('config.plugin.ItemMovement', itemMovement => {
+      /*GSTCState.subscribe('config.plugin.ItemMovement', itemMovement => {
         if (!itemMovement || !itemMovement.item) return;
         state.update(`config.chart.items.${itemMovement.item.id}.isResizing`, itemMovement.item.resizing);
-      });
+      });*/
 
       const element = document.getElementById('app');
 
       function recenter() {
-        gstc.api.scrollToTime(gstc.api.time.date().valueOf());
+        //gstc.api.scrollToTime(gstc.api.time.date().valueOf());
       }
 
       element.addEventListener('gstc-loaded', event => {

@@ -124,7 +124,7 @@ export default function ScrollBar(vido, props) {
   onDestroy(
     state.subscribeAll(
       props.type === 'horizontal'
-        ? [`config.scroll.${props.type}`, '_internal.chart.dimensions.width', '_internal.chart.time']
+        ? [`config.scroll.${props.type}`, '_internal.chart.time']
         : [`config.scroll.${props.type}`, '_internal.innerHeight', '_internal.list.rowsWithParentsExpanded'],
       () => {
         if (working) return;
