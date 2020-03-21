@@ -314,7 +314,7 @@ export default function Main(vido, props = {}) {
       for (let i = 0, len = time.onLevelDate.length; i < len; i++) {
         date = time.onLevelDate[i](date, period, level, levelIndex);
       }
-      const diffMs = date.rightGlobalDate.diff(date.leftGlobalDate, 'millisecond');
+      const diffMs = date.rightGlobal - date.leftGlobal;
       date.width = diffMs / timePerPixel;
       date.leftPx = leftPx;
       leftPx += date.width;
@@ -663,7 +663,7 @@ export default function Main(vido, props = {}) {
     initialized: false,
     zoom: 0,
     period: '',
-    scrollItem: 0,
+    scrollPosPx: 0,
     chartWidth: 0,
     leftGlobal: 0,
     centerGlobal: 0,
@@ -673,7 +673,7 @@ export default function Main(vido, props = {}) {
   };
   function recalculationIsNeeded() {
     const configTime = state.get('config.chart.time');
-    const scrollItem = state.get('config.scroll.horizontal.data');
+    const posPx = state.get('config.scroll.horizontal.posPx');
     const chartWidth = state.get('_internal.chart.dimensions.width');
     const cache = { ...recalculationTriggerCache };
     recalculationTriggerCache.zoom = configTime.zoom;
@@ -683,7 +683,7 @@ export default function Main(vido, props = {}) {
     recalculationTriggerCache.rightGlobal = configTime.rightGlobal;
     recalculationTriggerCache.from = configTime.from;
     recalculationTriggerCache.to = configTime.to;
-    recalculationTriggerCache.scrollItem = scrollItem;
+    recalculationTriggerCache.scrollPosPx = posPx;
     recalculationTriggerCache.chartWidth = chartWidth;
     if (!recalculationTriggerCache.initialized) {
       recalculationTriggerCache.initialized = true;
@@ -701,7 +701,7 @@ export default function Main(vido, props = {}) {
       return { name: 'rightGlobal', oldValue: cache.rightGlobal, newValue: configTime.rightGlobal };
     if (configTime.from !== cache.from) return { name: 'from', oldValue: cache.from, newValue: configTime.from };
     if (configTime.to !== cache.to) return { name: 'to', oldValue: cache.to, newValue: configTime.to };
-    if (scrollItem !== cache.scrollItem) return { name: 'scroll', oldValue: cache.scrollItem, newValue: scrollItem };
+    if (posPx !== cache.scrollPosPx) return { name: 'scroll', oldValue: cache.scrollPosPx, newValue: posPx };
     if (chartWidth !== cache.chartWidth)
       return { name: 'chartWidth', oldValue: cache.chartWidth, newValue: chartWidth };
     return false;
@@ -712,7 +712,7 @@ export default function Main(vido, props = {}) {
       [
         'config.chart.time',
         'config.chart.calendar.levels',
-        'config.scroll.horizontal.data',
+        'config.scroll.horizontal.posPx',
         '_internal.chart.dimensions.width'
       ],
       () => {
