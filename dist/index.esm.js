@@ -5975,52 +5975,19 @@ function Main(vido, props = {}) {
     }
     const generatePeriodDates = (formatting, time, level, levelIndex) => {
         const period = formatting.period;
-        const dates = [];
         let finalFrom = time.finalFrom;
         let leftDate = api.time.date(finalFrom).startOf(period);
-        const timePerPixel = time.timePerPixel;
-        if (!timePerPixel)
-            return [];
-        let leftPx = 0;
-        const diff = Math.ceil(api.time
-            .date(time.finalTo)
-            .endOf(period)
-            .diff(leftDate, period, true));
+        const rightDate = api.time.date(time.finalTo).endOf(period);
+        const dates = api.time.generatePeriodDates({ leftDate, rightDate, level, levelIndex, period, time });
         const className = api.getClass('chart-calendar-date');
-        const currentDate = api.time.date().startOf(period);
-        for (let i = 0; i < diff; i++) {
-            const rightGlobalDate = leftDate.endOf(period);
-            let date = {
-                leftGlobal: leftDate.valueOf(),
-                leftGlobalDate: leftDate,
-                rightGlobalDate,
-                rightGlobal: rightGlobalDate.valueOf(),
-                width: 0,
-                leftPx: 0,
-                rightPx: 0,
-                period,
-                formatted: null,
-                current: leftDate.valueOf() === currentDate.valueOf(),
-                previous: leftDate.add(1, period).valueOf() === currentDate.valueOf(),
-                next: leftDate.subtract(1, period).valueOf() === currentDate.valueOf()
-            };
+        for (const date of dates) {
             date.formatted = formatting.format({
-                timeStart: leftDate,
-                timeEnd: rightGlobalDate,
+                timeStart: date.leftGlobalDate,
+                timeEnd: date.rightGlobalDate,
                 vido,
                 className,
                 props: { date }
             });
-            for (let i = 0, len = time.onLevelDate.length; i < len; i++) {
-                date = time.onLevelDate[i](date, period, level, levelIndex);
-            }
-            const diffMs = date.rightGlobal - date.leftGlobal;
-            date.width = diffMs / timePerPixel;
-            date.leftPx = leftPx;
-            leftPx += date.width;
-            date.rightPx = leftPx;
-            dates.push(date);
-            leftDate = leftDate.add(1, period); // startOf will cause here bug on summertime change - do not touch! :)
         }
         return dates;
     };
@@ -6112,11 +6079,14 @@ function Main(vido, props = {}) {
             return [];
         let firstLeftDiff = 0;
         if (filtered[0].period !== time.period && time.leftGlobal > filtered[0].leftGlobal) {
-            firstLeftDiff = api.time.getDatesDiffPx(time.leftGlobal, filtered[0].leftGlobal, time.allDates[time.level]);
+            firstLeftDiff = api.time.getDatesDiffPx(time.leftGlobalDate, filtered[0].leftGlobalDate, time);
         }
-        if (filtered.length > 1000) {
-            throw new Error('Too much dates!');
-        }
+        console.log({
+            firstLeftDiff,
+            period: filtered[0].period,
+            firstLeft: filtered[0].leftGlobal,
+            timeLeft: time.leftGlobal
+        });
         let leftPx = 0;
         return filtered.map(date => {
             date.currentView = {
@@ -9145,7 +9115,7 @@ class TimeApi {
         // @ts-ignore
         dayjs_min.locale(this.locale, null, true);
     }
-    date(time) {
+    date(time = undefined) {
         const _dayjs = this.utcMode ? dayjs_min.utc : dayjs_min;
         return time ? _dayjs(time).locale(this.locale.name) : _dayjs().locale(this.locale.name);
     }
@@ -9251,8 +9221,47 @@ class TimeApi {
         const date = this.findDateAtTime(milliseconds, time.allDates[time.level]);
         return Math.round(scroll.maxPosPx * date.leftPercent);
     }
-    getDatesDiffPx(fromTime, toTime, dates, startToStart = true) {
-        if (fromTime === toTime && startToStart)
+    generatePeriodDates({ leftDate, rightDate, period, level, levelIndex, time }) {
+        if (!time.timePerPixel)
+            return [];
+        let leftPx = 0;
+        const diff = Math.ceil(rightDate.diff(leftDate, period, true));
+        const currentDate = this.date().startOf(period);
+        const dates = [];
+        for (let i = 0; i < diff; i++) {
+            const rightGlobalDate = leftDate.endOf(period);
+            let date = {
+                leftGlobal: leftDate.valueOf(),
+                leftGlobalDate: leftDate,
+                rightGlobalDate,
+                rightGlobal: rightGlobalDate.valueOf(),
+                width: 0,
+                leftPx: 0,
+                rightPx: 0,
+                period,
+                formatted: null,
+                current: leftDate.valueOf() === currentDate.valueOf(),
+                previous: leftDate.add(1, period).valueOf() === currentDate.valueOf(),
+                next: leftDate.subtract(1, period).valueOf() === currentDate.valueOf()
+            };
+            for (let i = 0, len = time.onLevelDate.length; i < len; i++) {
+                date = time.onLevelDate[i](date, period, level, levelIndex);
+            }
+            const diffMs = date.rightGlobal - date.leftGlobal;
+            date.width = diffMs / time.timePerPixel;
+            date.leftPx = leftPx;
+            leftPx += date.width;
+            date.rightPx = leftPx;
+            dates.push(date);
+            leftDate = leftDate.add(1, period); // 'startOf' will cause bug here on summertime change
+        }
+        return dates;
+    }
+    getDatesDiffPx(fromTime, toTime, time) {
+        if (fromTime === toTime)
+            return 0;
+        const mainDates = time.allDates[time.level];
+        if (mainDates.length === 0)
             return 0;
         let width = 0;
         let startCounting = false;
@@ -9263,15 +9272,50 @@ class TimeApi {
             toTime = initialFrom;
             inverse = true;
         }
-        for (const date of dates) {
-            if (date.leftGlobal >= fromTime) {
+        if (fromTime.valueOf() < mainDates[0].leftGlobal) {
+            // we need to generate some dates before
+            const period = mainDates[0].period;
+            const levelIndex = time.level;
+            const level = this.state.get(`config.chart.calendar.levels.${levelIndex}`);
+            const beforeDates = this.generatePeriodDates({
+                leftDate: fromTime,
+                rightDate: mainDates[0].leftGlobalDate,
+                period,
+                level,
+                levelIndex,
+                time
+            });
+            for (const date of beforeDates) {
+                width += date.width;
+            }
+        }
+        for (const mainDate of mainDates) {
+            if (mainDate.leftGlobal >= fromTime.valueOf()) {
                 startCounting = true;
             }
-            if (date.rightGlobal >= toTime) {
+            if (mainDate.rightGlobal >= toTime.valueOf()) {
                 break;
             }
             if (startCounting)
+                width += mainDate.width;
+        }
+        const endOfDates = mainDates[mainDates.length - 1].leftGlobalDate;
+        if (toTime.valueOf() > endOfDates.valueOf()) {
+            // we need to generate some dates after
+            const period = mainDates[0].period;
+            const levelIndex = time.level;
+            const level = this.state.get(`config.chart.calendar.levels.${levelIndex}`);
+            const beforeDates = this.generatePeriodDates({
+                leftDate: toTime,
+                rightDate: endOfDates,
+                period,
+                level,
+                levelIndex,
+                time
+            });
+            for (const date of beforeDates) {
                 width += date.width;
+            }
         }
         return inverse ? -width : width;
     }

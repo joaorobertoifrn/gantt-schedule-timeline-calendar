@@ -17,7 +17,8 @@ import {
   Scroll,
   ChartInternalTimeLevel,
   ScrollTypeHorizontal,
-  Period
+  Period,
+  ChartCalendarLevel
 } from '../types';
 import advancedFormat from 'dayjs/plugin/advancedFormat';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
@@ -41,7 +42,7 @@ export default class TimeApi {
     dayjs.locale(this.locale, null, true);
   }
 
-  public date(time) {
+  public date(time: number | string | Date | undefined = undefined) {
     const _dayjs = this.utcMode ? dayjs.utc : dayjs;
     return time ? _dayjs(time).locale(this.locale.name) : _dayjs().locale(this.locale.name);
   }
@@ -163,8 +164,60 @@ export default class TimeApi {
     return Math.round(scroll.maxPosPx * date.leftPercent);
   }
 
-  public getDatesDiffPx(fromTime: number, toTime: number, dates: ChartTimeDate[], startToStart = true): number {
-    if (fromTime === toTime && startToStart) return 0;
+  public generatePeriodDates({
+    leftDate,
+    rightDate,
+    period,
+    level,
+    levelIndex,
+    time
+  }: {
+    leftDate: Dayjs;
+    rightDate: Dayjs;
+    period: Period;
+    level: ChartCalendarLevel;
+    levelIndex: number;
+    time: ChartInternalTime;
+  }) {
+    if (!time.timePerPixel) return [];
+    let leftPx = 0;
+    const diff = Math.ceil(rightDate.diff(leftDate, period, true));
+    const currentDate = this.date().startOf(period);
+    const dates = [];
+    for (let i = 0; i < diff; i++) {
+      const rightGlobalDate = leftDate.endOf(period);
+      let date: ChartInternalTimeLevelDate = {
+        leftGlobal: leftDate.valueOf(),
+        leftGlobalDate: leftDate,
+        rightGlobalDate,
+        rightGlobal: rightGlobalDate.valueOf(),
+        width: 0,
+        leftPx: 0,
+        rightPx: 0,
+        period,
+        formatted: null,
+        current: leftDate.valueOf() === currentDate.valueOf(),
+        previous: leftDate.add(1, period).valueOf() === currentDate.valueOf(),
+        next: leftDate.subtract(1, period).valueOf() === currentDate.valueOf()
+      };
+      for (let i = 0, len = time.onLevelDate.length; i < len; i++) {
+        date = time.onLevelDate[i](date, period, level, levelIndex);
+      }
+      const diffMs = date.rightGlobal - date.leftGlobal;
+      date.width = diffMs / time.timePerPixel;
+      date.leftPx = leftPx;
+      leftPx += date.width;
+      date.rightPx = leftPx;
+      dates.push(date);
+      leftDate = leftDate.add(1, period); // 'startOf' will cause bug here on summertime change
+    }
+    return dates;
+  }
+
+  public getDatesDiffPx(fromTime: Dayjs, toTime: Dayjs, time: ChartInternalTime): number {
+    if (fromTime === toTime) return 0;
+    const mainDates = time.allDates[time.level];
+    if (mainDates.length === 0) return 0;
     let width = 0;
     let startCounting = false;
     let inverse = false;
@@ -174,14 +227,51 @@ export default class TimeApi {
       toTime = initialFrom;
       inverse = true;
     }
-    for (const date of dates) {
-      if (date.leftGlobal >= fromTime) {
+    if (fromTime.valueOf() < mainDates[0].leftGlobal) {
+      // we need to generate some dates before
+      const period = mainDates[0].period;
+      const levelIndex = time.level;
+      const level = this.state.get(`config.chart.calendar.levels.${levelIndex}`) as ChartCalendarLevel;
+      const beforeDates = this.generatePeriodDates({
+        leftDate: fromTime,
+        rightDate: mainDates[0].leftGlobalDate,
+        period,
+        level,
+        levelIndex,
+        time
+      });
+      for (const date of beforeDates) {
+        width += date.width;
+      }
+    }
+
+    for (const mainDate of mainDates) {
+      if (mainDate.leftGlobal >= fromTime.valueOf()) {
         startCounting = true;
       }
-      if (date.rightGlobal >= toTime) {
+      if (mainDate.rightGlobal >= toTime.valueOf()) {
         break;
       }
-      if (startCounting) width += date.width;
+      if (startCounting) width += mainDate.width;
+    }
+
+    const endOfDates = mainDates[mainDates.length - 1].leftGlobalDate;
+    if (toTime.valueOf() > endOfDates.valueOf()) {
+      // we need to generate some dates after
+      const period = mainDates[0].period;
+      const levelIndex = time.level;
+      const level = this.state.get(`config.chart.calendar.levels.${levelIndex}`) as ChartCalendarLevel;
+      const beforeDates = this.generatePeriodDates({
+        leftDate: toTime,
+        rightDate: endOfDates,
+        period,
+        level,
+        levelIndex,
+        time
+      });
+      for (const date of beforeDates) {
+        width += date.width;
+      }
     }
     return inverse ? -width : width;
   }

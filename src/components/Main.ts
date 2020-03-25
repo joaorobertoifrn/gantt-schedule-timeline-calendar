@@ -274,53 +274,19 @@ export default function Main(vido, props = {}) {
     levelIndex: number
   ): ChartInternalTimeLevel => {
     const period = formatting.period;
-    const dates = [];
     let finalFrom = time.finalFrom;
     let leftDate = api.time.date(finalFrom).startOf(period);
-    const timePerPixel = time.timePerPixel;
-    if (!timePerPixel) return [];
-    let leftPx = 0;
-    const diff = Math.ceil(
-      api.time
-        .date(time.finalTo)
-        .endOf(period)
-        .diff(leftDate, period, true)
-    );
+    const rightDate = api.time.date(time.finalTo).endOf(period);
+    const dates = api.time.generatePeriodDates({ leftDate, rightDate, level, levelIndex, period, time });
     const className = api.getClass('chart-calendar-date');
-    const currentDate = api.time.date().startOf(period);
-    for (let i = 0; i < diff; i++) {
-      const rightGlobalDate = leftDate.endOf(period);
-      let date: ChartInternalTimeLevelDate = {
-        leftGlobal: leftDate.valueOf(),
-        leftGlobalDate: leftDate,
-        rightGlobalDate,
-        rightGlobal: rightGlobalDate.valueOf(),
-        width: 0,
-        leftPx: 0,
-        rightPx: 0,
-        period,
-        formatted: null,
-        current: leftDate.valueOf() === currentDate.valueOf(),
-        previous: leftDate.add(1, period).valueOf() === currentDate.valueOf(),
-        next: leftDate.subtract(1, period).valueOf() === currentDate.valueOf()
-      };
+    for (const date of dates) {
       date.formatted = formatting.format({
-        timeStart: leftDate,
-        timeEnd: rightGlobalDate,
+        timeStart: date.leftGlobalDate,
+        timeEnd: date.rightGlobalDate,
         vido,
         className,
         props: { date }
       });
-      for (let i = 0, len = time.onLevelDate.length; i < len; i++) {
-        date = time.onLevelDate[i](date, period, level, levelIndex);
-      }
-      const diffMs = date.rightGlobal - date.leftGlobal;
-      date.width = diffMs / timePerPixel;
-      date.leftPx = leftPx;
-      leftPx += date.width;
-      date.rightPx = leftPx;
-      dates.push(date);
-      leftDate = leftDate.add(1, period); // startOf will cause here bug on summertime change - do not touch! :)
     }
     return dates;
   };
@@ -412,11 +378,14 @@ export default function Main(vido, props = {}) {
     if (!filtered.length) return [];
     let firstLeftDiff = 0;
     if (filtered[0].period !== time.period && time.leftGlobal > filtered[0].leftGlobal) {
-      firstLeftDiff = api.time.getDatesDiffPx(time.leftGlobal, filtered[0].leftGlobal, time.allDates[time.level]);
+      firstLeftDiff = api.time.getDatesDiffPx(time.leftGlobalDate, filtered[0].leftGlobalDate, time);
     }
-    if (filtered.length > 1000) {
-      throw new Error('Too much dates!');
-    }
+    console.log({
+      firstLeftDiff,
+      period: filtered[0].period,
+      firstLeft: filtered[0].leftGlobal,
+      timeLeft: time.leftGlobal
+    });
     let leftPx = 0;
     return filtered.map(date => {
       date.currentView = {

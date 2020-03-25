@@ -198,11 +198,11 @@
       const element = document.getElementById('app');
 
       function recenter() {
-        //gstc.api.scrollToTime(gstc.api.time.date().valueOf());
+        gstc.api.scrollToTime(gstc.api.time.date().valueOf());
       }
 
       element.addEventListener('gstc-loaded', event => {
-        //recenter();
+        recenter();
       });
 
       const gstc = GSTC({
